@@ -1345,6 +1345,45 @@ await click(208, 284, 1200)                                 // NEW GAME
 check('and a season that ended can be played again', await scene() === 'Farm', await scene())
 await shot('13-again')
 
+/* --------------------------------------- when there is no server to reach */
+// The one failure a player can be left with before there is a game at all: the
+// address this build was given answers nothing. Everywhere else a refusal is
+// about one action in a farm already being played, and a second of red is the
+// right weight for it — here it is the reason the only button on the screen did
+// not work, and a message that has gone by the time they look up leaves them
+// pressing it again wondering what is broken.
+{
+  const stranded = await browser.newPage()
+  await stranded.setViewport({ width: 1200, height: 840 })
+  // A port with nothing behind it, so the answer is a real network failure.
+  await stranded.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', 'http://127.0.0.1:1/'))
+  await stranded.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
+  await wait(2600)
+  const b = await stranded.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+  await stranded.mouse.click(b.x + b.w * (208 / W), b.y + b.h * (284 / H))
+  const said = async () => stranded.evaluate(() => {
+    const out = []
+    for (const sc of window.__game.scene.scenes) {
+      if (!sc.scene.isActive()) continue
+      sc.children.list.forEach(o => { if (o.type === 'Text' && o.visible && o.text) out.push(o.text) })
+    }
+    return out
+  })
+  let told = false
+  for (let i = 0; i < 30 && !told; i++) { await wait(200); told = (await said()).some(x => /connection|เชื่อมต่อ/i.test(x)) }
+  check('a farm that cannot be reached says so', told, JSON.stringify(await said()))
+  await wait(4000)
+  check('and is still saying so several seconds later',
+    (await said()).some(x => /connection|เชื่อมต่อ/i.test(x)), JSON.stringify(await said()))
+  const menu = await stranded.evaluate(() => {
+    const m = window.__game.scene.getScene('Menu')
+    return { starting: m.starting, onMenu: m.scene.isActive() }
+  })
+  check('the player is left on the menu', menu.onMenu)
+  check('with the buttons usable again', menu.starting === false)
+  await stranded.close()
+}
+
 await browser.close()
 check('no console errors anywhere in the run', errors.length === 0, [...new Set(errors)].join(' | '))
 

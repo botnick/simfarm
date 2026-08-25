@@ -21,6 +21,12 @@ for (const d of DEVICES) {
   await p.setViewport({ width: d.width, height: d.height, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await p.evaluateOnNewDocument((up) => {
     localStorage.setItem('simfarm.upright', up ? '1' : '0')
+    // This suite asks whether the game is playable on a phone, not whether a
+    // server is reachable. A built bundle carries the address it was built with,
+    // so without this the tap that should open a farm goes to whatever that
+    // address is — and every device reads as a problem for a reason that has
+    // nothing to do with the phone.
+    localStorage.setItem('simfarm.server', '')
   }, !!d.upright)
   await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await new Promise(r => setTimeout(r, 2600))

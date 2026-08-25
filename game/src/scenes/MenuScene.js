@@ -104,6 +104,11 @@ export default class MenuScene extends Phaser.Scene {
 
     // Locked together while a farm is being opened, and each put back the way it
     // was rather than simply switched on — LOAD is not always meant to be.
+    // Sits under the buttons and says why the last attempt did not work, until
+    // there is a next one.
+    this.said = label(this, WIDTH / 2, 322, '', { size: 11, color: '#ffd6d6', origin: [0.5, 0.5] })
+      .setVisible(false).setStroke('#3a1010', 4)
+
     this.lockButtons = () => { newBtn.setEnabled(false); loadBtn.setEnabled(false); this.alsoLock?.setEnabled(false) }
     this.unlockButtons = () => { newBtn.setEnabled(true); loadBtn.setEnabled(canLoad); this.alsoLock?.setEnabled(true) }
 
@@ -143,6 +148,7 @@ export default class MenuScene extends Phaser.Scene {
     // that was evicted.
     if (this.starting) return
     this.starting = true
+    this.said?.setVisible(false)
     this.lockButtons?.()
     // Everything below can wait on the network, and this screen can be left or
     // restarted while it does. An answer that arrives for a menu nobody is
@@ -182,8 +188,17 @@ export default class MenuScene extends Phaser.Scene {
     // that ignores a click without saying why reads as broken.
     const onRefused = (reason) => {
       this.registry.set('refusal', { reason, at: this.time.now })
+      if (!this.scene.isActive()) return
       // Every other screen carries a HUD that shows these; the menu does not.
-      if (this.scene.isActive()) toast(this, WIDTH / 2, 200, t(REFUSALS[reason] ?? 'refused.other'), '#ffd6d6')
+      //
+      // And here it stays put rather than floating away. Everywhere else a
+      // refusal is about one action in a game already being played, and a
+      // second of red is the right weight for it. Here it is the reason there
+      // is no game at all — the player pressed the only button on the screen
+      // and it did not work — and a message that has gone by the time they look
+      // up leaves them pressing it again wondering what is broken.
+      this.said?.setText(t(REFUSALS[reason] ?? 'refused.other')).setVisible(true)
+      toast(this, WIDTH / 2, 200, t(REFUSALS[reason] ?? 'refused.other'), '#ffd6d6')
     }
 
     // Every way out of here that is not a farm has to give the buttons back, or

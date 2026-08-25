@@ -45,7 +45,7 @@ server logs what it dropped.
 ## Checking a change
 
     npm test             # 412  the rules
-    npm run e2e          # 229  the game in a browser, offline
+    npm run e2e          # 233  the game in a browser, offline
     npm run online       #  70  the game in a browser, against a real server
     npm run test:server  # 189  the server refusing what it should
     npm run facade       #  63  what the browser does with every answer a server can give
@@ -135,6 +135,8 @@ build served under a path, if that is where it is going:
 
     npm run build && npx vite preview --port 4173
     URL=http://localhost:4173/ npm run e2e
+    URL=http://localhost:4173/ npm run online
+    URL=http://localhost:4173/ npm run mobile
 
 The fonts are the part that only breaks under a path. `public/` is copied
 verbatim, so a root-absolute `url()` inside `assets/fonts/fonts.css` would ask

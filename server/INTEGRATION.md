@@ -274,7 +274,7 @@ for exists, and that every line that exists is reachable from the code.
 
     cd game
     npm test             # 412  the rules
-    npm run e2e          # 229  the game in a browser, offline
+    npm run e2e          # 233  the game in a browser, offline
     npm run online       #  70  the game in a browser, against a real server
     npm run facade       #  63  what the browser does with every answer a server can give
     npm run test:server  # 189  the server refusing what it should
