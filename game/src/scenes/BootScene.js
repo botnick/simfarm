@@ -54,7 +54,7 @@ export default class BootScene extends Phaser.Scene {
     for (const sp of data.supplies) if (sp.image) this.load.image(`supply:${sp.id}`, `assets/goods/${sp.image}.png`)
     // Scene plates. A frame that has been redrawn ships as a PNG at the same
     // 600x420 layout as the plate it replaces, so no hotspot or click moves.
-    const REDRAWN = new Set(['farm'])
+    const REDRAWN = new Set(['farm', 'plot1', 'plot2', 'plot3', 'plot4'])
     for (const s of ['menu', 'farm', 'plot1', 'plot2', 'plot3', 'plot4', 'coop', 'village', 'shop', 'shop_animal']) {
       if (REDRAWN.has(s)) this.load.image(`scene:${s}`, `assets/scenes/${s}.png`)
       else this.load.svg(`scene:${s}`, `assets/scenes/${s}.svg`, { width: WIDTH * RENDER_SCALE, height: HEIGHT * RENDER_SCALE })

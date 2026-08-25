@@ -72,14 +72,42 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms))
  */
 const REFERENCE = join(HERE, '../generated/_style/object-anchor.png')
 
-async function draw(name, subject) {
+/**
+ * Redrawing a frame from the frame itself.
+ *
+ * The house style as written above is for objects: white ground, a shadow
+ * under it, nothing else in shot. A frame needs the opposite — it fills the
+ * picture and has no background to speak of — so it gets its own wording.
+ */
+const SCENE_STYLE = [
+  'cute doodle cartoon game art',
+  'dark-brown outlines (#4a3222), flat warm colors, no gradients, no textures, no noise',
+  'leaf greens #8fce5a and #6fb54a, cream #f7e7c5, warm brown #a5683c, orange #f2a541',
+  'keep the line weight identical everywhere in the picture',
+  'the picture fills the whole frame edge to edge, no border, no margin, no white background, no drop shadow around the picture',
+  'no text, no letters, no numbers, no watermark, no logo, no signature, no UI labels',
+].join(', ')
+
+const REDRAW = () => [
+  'Redraw this picture in a new art style.',
+  'Keep the composition EXACTLY as it is: every object stays at the same position,',
+  'the same size, and the same angle as in the reference. Do not move anything,',
+  'do not add anything, do not remove anything, do not re-arrange anything.',
+  'Same camera, same framing, same proportions, edge to edge.',
+  'Only the drawing style changes:',
+  SCENE_STYLE,
+].join(' ')
+
+async function draw(name, subject, guideOverride) {
   const body = new FormData()
   body.set('model', 'nano-banana-pro')
-  body.set('prompt', `${subject}. ${STYLE}`)
+  // A redraw carries its own wording end to end; the object style would fight
+  // it (white ground, a shadow under the subject, nothing else in frame).
+  body.set('prompt', guideOverride ? subject : `${subject}. ${STYLE}`)
   const plan = name.startsWith('scene-') && name.endsWith('-full')
     ? join(HERE, `../generated/_plans/${name.slice('scene-'.length, -'-full'.length)}.png`)
     : null
-  const guide = plan && existsSync(plan) ? plan : REFERENCE
+  const guide = guideOverride ?? (plan && existsSync(plan) ? plan : REFERENCE)
   if (existsSync(guide)) {
     const png = readFileSync(guide)
     body.set('image', new Blob([png], { type: 'image/png' }), 'reference.png')
@@ -157,7 +185,10 @@ const SCENE = (what) => [
 const args = process.argv.slice(2)
 const sheet = args[0] === '--sheet'
 const scene = args[0] === '--scene'
-const jobs = args[0] === '--batch'
+const redraw = args[0] === '--redraw'
+const jobs = redraw
+  ? [[args[1], REDRAW(), args[2]]]
+  : args[0] === '--batch'
   ? Object.entries(JSON.parse(readFileSync(args[1], 'utf8')))
   : sheet
     ? [[`${args[1]}-sheet`, SHEET(args.slice(2).join(' '))]]
@@ -165,10 +196,10 @@ const jobs = args[0] === '--batch'
       ? [[`scene-${args[1]}-full`, SCENE(args.slice(2).join(' '))]]
       : [[args[0], args.slice(1).join(' ')]]
 
-for (const [name, subject] of jobs) {
+for (const [name, subject, guide] of jobs) {
   if (!name || !subject) { console.error('usage: generate-art.mjs <name> "<what it is>"'); process.exit(1) }
   try {
-    const size = await draw(name, subject)
+    const size = await draw(name, subject, guide)
     console.log(`  ${name.padEnd(22)} ${(size / 1024).toFixed(0)} KB`)
   } catch (err) {
     console.error(`  ${name.padEnd(22)} ${err.message}`)
