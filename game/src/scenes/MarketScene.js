@@ -42,7 +42,8 @@ export default class MarketScene extends Phaser.Scene {
 
     backdrop(this, 'scene:village')
     this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x1a1208, 0.42).setOrigin(0)
-    this.hud = makeHud(this, 'plain', { day: true, dayAt: { x: 252, y: 8 } })
+    // The village is scenery, not a plate, so both readouts get their own pill.
+    this.hud = makeHud(this, 'plain', { day: true, dayAt: { x: 252, y: 8 }, moneyAt: { x: 8, y: 8 } })
 
     title(this, WIDTH / 2, 44, t('market.title'), { size: 16 })
     panel(this, 14, 58, WIDTH - 28, 306, { alpha: 0.97 })

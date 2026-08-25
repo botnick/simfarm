@@ -5,7 +5,7 @@
 // being read, and the missing regions produced no error at all — the fields
 // simply drew nothing and ignored every click. A silent empty list is the
 // dangerous part, so it is now an explicit failure here.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
 const load = (name) => JSON.parse(readFileSync(new URL(`../public/data/${name}`, import.meta.url), 'utf8'))
 const first = load('interaction-map.json')
@@ -42,6 +42,51 @@ export function check() {
     for (const r of regionsFor(frame)) {
       if (!(r.w > 0 && r.h > 0)) problems.push(`frame ${frame} region ${r.role} has no size`)
       if (!Number.isFinite(r.x) || !Number.isFinite(r.y)) problems.push(`frame ${frame} region ${r.role} has no position`)
+    }
+  }
+  problems.push(...plates())
+  return problems
+}
+
+/**
+ * A plate painted into a screen's artwork has to be filled in.
+ *
+ * The coop's backdrop has a money plate drawn on it. The scene asked `makeHud`
+ * for a frame that does not exist, so the readout was never created, and the
+ * plate sat there empty — on the one screen besides the shop where money
+ * actually changes, since the flock's produce is sold from it. Nothing failed;
+ * it just looked like a hole in the picture, and only turned up by looking.
+ *
+ * So: a scene that takes its hotspots from a frame whose artwork has a slot
+ * must build its readouts from a frame that has that slot too.
+ */
+export function plates() {
+  const hud = load('interaction-map-ui.json').hudByFrame ?? {}
+  const boxesFor = (frame) => {
+    let boxes = hud[String(frame)]
+    if (typeof boxes === 'string') boxes = hud[boxes.replace('same-as:', '')]
+    return boxes ?? null
+  }
+  const problems = []
+  const dir = new URL('../src/scenes/', import.meta.url)
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith('Scene.js')) continue
+    const src = readFileSync(new URL(file, dir), 'utf8')
+    const asked = src.match(/makeHud\(this,\s*([^,)]+)/)?.[1]?.trim().replace(/['"]/g, '')
+    if (!asked) continue
+    const painted = src.match(/regions\(this,\s*(\d+)\s*\)/)?.[1]
+    // A frame nobody has heard of gives back nothing at all, silently.
+    if (/^\d+$/.test(asked) && !boxesFor(asked)) {
+      problems.push(`${file} builds its readouts from frame ${asked}, which has no slots`)
+    }
+    if (!painted) continue
+    const paintedSlots = (boxesFor(painted) ?? []).map(b => b.role)
+    const filledSlots = (boxesFor(asked) ?? []).map(b => b.role)
+    for (const slot of paintedSlots) {
+      if (!filledSlots.includes(slot)) {
+        problems.push(`${file} is drawn on frame ${painted}, which has a ${slot} painted on it, `
+          + `but builds its readouts from ${asked} — that slot stays empty`)
+      }
     }
   }
   return problems

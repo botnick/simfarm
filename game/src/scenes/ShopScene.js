@@ -115,7 +115,10 @@ export default class ShopScene extends Phaser.Scene {
           : now < c.sellPrice ? t('shop.priceDropped') : t('shop.priceNow', money(now)),
         factsWarn: !order && now < c.sellPrice,
         badge: order ? t('shop.orderBadge') : null,
-        owned: n, ownedLabel: t('shop.stored'), selling: true,
+        // No corner count on a selling row: the line under the name already
+        // says how many are in the barn, and "stored 5" three words from
+        // "5 in the barn" is the same fact twice with nothing to tell them apart.
+        selling: true,
         act: () => this.farm.sellCrop({ cropId: c.id, count: n }), can: true, verb: t('shop.sellAll', n),
       })
     }
@@ -129,7 +132,7 @@ export default class ShopScene extends Phaser.Scene {
           : t('shop.inBarnCount', n),
         descWarn: owedOnGood > 0,
         facts: t('shop.sellOne', money(g.price)),
-        owned: n, ownedLabel: t('shop.stored'), selling: true,
+        selling: true,
         act: () => this.farm.sellGood({ goodId: g.id, count: n }), can: true, verb: t('shop.sellAll', n),
       })
     }

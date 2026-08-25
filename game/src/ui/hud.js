@@ -29,7 +29,7 @@ const midY = (b) => b.y + b.h / 2
 /**
  * @param frame the original frame number, which selects the HUD layout
  */
-export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, level = false, levelAt = { x: 6, y: 6 } } = {}) {
+export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, level = false, levelAt = { x: 6, y: 6 }, moneyAt = { x: 8, y: 8 } } = {}) {
   const all = scene.registry.get('hitsUi')?.hudByFrame ?? {}
   let boxes = all[String(frame)]
   if (typeof boxes === 'string') boxes = all[boxes.replace('same-as:', '')]   // e.g. "same-as:20"
@@ -93,6 +93,10 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
   // sized to whatever the current language makes of the text.
   if (!dayBox && day) parts.dayChip = chip(scene, dayAt.x, dayAt.y + 11, { tone: 'blue' })
   if (!fillBox) parts.energyChip = chip(scene, WIDTH - 8, 16, { tone: 'green', align: 'right' })
+  // Money got the plate treatment and never the pill, so a screen painted on
+  // scenery rather than on a plate simply did not show it. The market is one:
+  // an order there pays thousands, and the player had nowhere to watch it land.
+  if (!moneyBox) parts.moneyChip = chip(scene, moneyAt.x, moneyAt.y + 11, { tone: 'gold' })
 
   // The farm's level and how far it is through the current one, on one small
   // plaque. Loose text floated over the scenery and could not be read.
@@ -293,7 +297,11 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
     level: 1,
     // Where money lands on this screen, so an effect can fly coins to it. The
     // panels differ per frame, hence asking rather than assuming a corner.
-    walletAt: parts.money ? { x: parts.money.x, y: parts.money.y } : { x: 70, y: 26 },
+    // Where money lands on this screen, so coins fly to wherever it is actually
+    // shown — the plate on some screens, the pill on the rest.
+    walletAt: parts.money
+      ? { x: parts.money.x, y: parts.money.y }
+      : parts.moneyChip ? { x: parts.moneyChip.left + parts.moneyChip.width / 2, y: moneyAt.y + 11 } : { x: 70, y: 26 },
     update(state, rules, data) {
       if (data) {
         api.level = levelProgress(state.xp ?? 0, data).level
@@ -319,6 +327,7 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
       balance(parts.dayCaption, parts.day)
       balance(parts.moneyCaption, parts.money)
       parts.dayChip?.setText(rules.endDay ? t('hud.day', state.day, rules.endDay) : t('hud.dayEndless', state.day))
+      parts.moneyChip?.setText(`${t('hud.money')} ${money(state.money)}`)
 
       // Against what this farm's day actually holds, not the number a new farm
       // starts on: the farm grows with the level, and a heart measured against

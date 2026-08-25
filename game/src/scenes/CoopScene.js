@@ -32,10 +32,18 @@ export default class CoopScene extends Phaser.Scene {
     backdrop(this, 'scene:coop')
     this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x2a1a0e, 0.35).setOrigin(0)
     this.hits = regions(this, 40)
-    this.hud = makeHud(this, 'plain', { day: true, dayAt: { x: 252, y: 8 } })
+    // Frame 40, the same frame the hotspots come from. The coop's own artwork
+    // has a money plate painted into it, and asking for a frame that does not
+    // exist left that plate on screen with nothing in it — on the one screen
+    // besides the shop where money actually changes, since this is where the
+    // flock's produce is sold.
+    this.hud = makeHud(this, 40, { day: true, dayAt: { x: 252, y: 8 } })
 
     title(this, WIDTH / 2, 46, t('coop.flock'), { size: 16 })
-    panel(this, 14, 58, WIDTH - 28, 306, { alpha: 0.96 })
+    // Low enough to clear the money plate painted into the coop's own artwork:
+    // its value box runs to y 72, and a panel starting at 58 cut the number in
+    // half. The rows below move down with it and still finish above the buttons.
+    panel(this, 14, 76, WIDTH - 28, 288, { alpha: 0.96 })
 
     this.rows = []
     this.parts = []
@@ -104,7 +112,7 @@ export default class CoopScene extends Phaser.Scene {
 
     const level = this.data_.animals.length
     this.data_.animals.forEach((a, i) => {
-      const y = 66 + i * 73
+      const y = 84 + i * 71
       const kept = s.animals[a.id] ?? 0
       const fed = s.fed[a.id] ?? 0
       const good = byId(this.data_.goods, a.produces)
