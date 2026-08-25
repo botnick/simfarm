@@ -122,7 +122,8 @@
       "desc": {
         "en": "Makes a plant grow faster. Never use it more than twice on one tile.",
         "th": "เร่งให้ต้นไม้โตเร็วขึ้น อย่าใส่เกิน 2 ครั้งต่อช่องเด็ดขาด"
-      }
+      },
+      "image": "supply-fertilizer"
     },
     {
       "id": "pesticide",
@@ -135,7 +136,8 @@
       "desc": {
         "en": "Spray a tile that caught a bug.",
         "th": "พ่นใส่ช่องที่มีหนอนลง"
-      }
+      },
+      "image": "supply-pesticide"
     },
     {
       "id": "grain",
@@ -216,7 +218,8 @@
       "desc": {
         "en": "Lays one egg a day, as long as it is fed.",
         "th": "ออกไข่วันละฟอง ถ้าให้อาหารครบ"
-      }
+      },
+      "image": "animal-chicken"
     },
     {
       "id": "sheep",
@@ -300,7 +303,8 @@
       "price": 50,
       "color": "#f6e7c1",
       "from": "coop",
-      "art": "egg"
+      "art": "egg",
+      "image": "egg"
     },
     {
       "id": "sunoil",

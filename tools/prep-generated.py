@@ -115,6 +115,32 @@ def lift_background(img: Image.Image) -> Image.Image:
     return img
 
 
+def only_the_subject(img: Image.Image) -> Image.Image:
+    """Drop anything that is not part of the main object.
+
+    Asked for one duck and nothing else, the generator draws one duck and three
+    floating leaves. They are pleasant on a white sheet and wrong in a list of
+    animals, where the sprite is meant to be the animal. A single object is one
+    connected piece of ink, so anything not joined to the biggest piece is
+    decoration and goes.
+
+    Not used for crops: a handful of seeds is several pieces on purpose.
+    """
+    import numpy as np
+    from scipy import ndimage
+
+    a = np.array(img)
+    solid = a[..., 3] > 40
+    labels, count = ndimage.label(solid, structure=np.ones((3, 3)))
+    if count <= 1:
+        return img
+    sizes = ndimage.sum(solid, labels, range(1, count + 1))
+    main = int(np.argmax(sizes)) + 1
+    # Anything sharing the main piece's ground shadow counts as part of it.
+    a[(labels != main) & (labels != 0)] = (0, 0, 0, 0)
+    return Image.fromarray(a)
+
+
 def main() -> int:
     # Named on the command line, only those are cut. Art arrives in batches and
     # redoing the whole folder every time hides which sprite actually changed.
@@ -126,7 +152,7 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
     for f in files:
-        cut = lift_background(Image.open(f))
+        cut = only_the_subject(lift_background(Image.open(f)))
         box = cut.getbbox()
         if box is None:
             print(f"  {f.name}: nothing left after the cutout, skipped")
