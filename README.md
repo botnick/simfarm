@@ -56,6 +56,7 @@ server logs what it dropped.
     npm run durable      #   9  two processes over one ledger, across a restart
     npm run pace         #   9  how long before each thing becomes available
     npm run fuzz         #   5  a farm played at random for years, still a farm
+    npm run production   #  21  the built game, a strict server, across origins
     npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs
@@ -142,6 +143,24 @@ The fonts are the part that only breaks under a path. `public/` is copied
 verbatim, so a root-absolute `url()` inside `assets/fonts/fonts.css` would ask
 for the files at the root of the domain wherever the game actually is — and the
 only sign of it is that the display face quietly does not arrive.
+
+## Before it goes anywhere
+
+    npm run build && npm run production
+
+That runs the built game against a server configured the way one is meant to be:
+strict, with a real secret, a ledger on disk, one named origin and a host key. It
+is the only suite that does — every other one runs the server the way a laptop
+runs it, which is the opposite of all four. So the arrangement a player would
+actually meet had never been started, let alone played.
+
+Two things only exist there. Cross-origin is the shape of a real deployment — the
+game is served from one place and the server lives in another, so every request
+is a preflight away from working — and the origin is a rule with teeth: point it
+at a different address and no farm opens at all. And a host key means the browser
+is no longer allowed to settle its own rewards, which is a path nothing else
+takes: the reward stays in the outbox, the browser is refused when it tries to
+clear it, and only the key clears it.
 
 ## Credit
 
