@@ -1,0 +1,56 @@
+{
+  "coordinateSystem": "600x420 px; x/y are SWF twips divided by 20; draw order is increasing depth",
+  "exhaustiveDisplayLists": "scene-display-lists.json",
+  "frame": {
+    "5": {"name":"menu_cover","exactSvg":"frames/5.svg","bg":"see scene-display-lists.json#5","logo":{"id":69,"type":"sprite","x":343.4,"y":165.6,"scaleX":1.8976288,"scaleY":1.8976288}},
+    "15": {"name":"farm_overview","exactSvg":"frames/15.svg","bg":"see scene-display-lists.json#15"},
+    "20": {"name":"plot_lahan1","exactSvg":"frames/20.svg","bg":"see scene-display-lists.json#20","soilGrid":"plot20"},
+    "25": {"name":"plot_lahan2","exactSvg":"frames/25.svg","bg":"see scene-display-lists.json#25","soilGrid":"plot20"},
+    "30": {"name":"plot_lahan3","exactSvg":"frames/30.svg","bg":"see scene-display-lists.json#30","soilGrid":"plot30"},
+    "35": {"name":"plot_lahan4","exactSvg":"frames/35.svg","bg":"see scene-display-lists.json#35","soilGrid":"plot30"},
+    "40": {"name":"chicken_farm","exactSvg":"frames/40.svg","bg":[{"id":475,"type":"shape","x":0,"y":0},{"id":483,"type":"sprite","x":400.6,"y":103.15}]},
+    "45": {"name":"end_day_dialog_actual_render","exactSvg":"frames/45.svg","bg":[{"id":513,"type":"shape","x":0,"y":0},{"id":515,"type":"sprite","x":297.65,"y":379.05},{"id":517,"type":"sprite","x":299.25,"y":217.65}]},
+    "50": {"name":"village_desa_actual_render","exactSvg":"frames/50.svg","bg":"see scene-display-lists.json#50"},
+    "55": {"name":"seed_item_shop","exactSvg":"frames/55.svg","bg":[{"id":515,"type":"sprite","x":299.35,"y":386.8},{"id":517,"type":"sprite","x":299.25,"y":217.65},{"id":520,"type":"sprite","x":442.4,"y":343.3},{"id":520,"type":"sprite","x":336.65,"y":391.9},{"id":520,"type":"sprite","x":127.9,"y":400.4},{"id":522,"type":"sprite","x":15.25,"y":268.5},{"id":524,"type":"sprite","x":552.25,"y":304.65}]},
+    "60": {"name":"chicken_shop","exactSvg":"frames/60.svg","bg":"see scene-display-lists.json#60"},
+    "65": {"name":"savegame","exactSvg":"frames/65.svg","bg":"see scene-display-lists.json#65"},
+    "70": {"name":"savegame_alt","exactSvg":"frames/70.svg","bg":"see scene-display-lists.json#70"},
+    "75": {"name":"loadgame","exactSvg":"frames/75.svg","bg":"see scene-display-lists.json#75"},
+    "80": {"name":"instruction_end","exactSvg":"frames/80.svg","bg":"see scene-display-lists.json#80"}
+  },
+  "hud": {
+    "overviewDayMoney":{"id":247,"type":"sprite","path":"sprites/DefineSprite_247/1.svg","x":117.2,"y":330.1},
+    "moneyPanel":{"id":399,"type":"sprite","path":"sprites/DefineSprite_399/1.svg","x":100.25,"y":45.0},
+    "moneyIcon":{"id":392,"type":"shape","path":"shapes/392.svg"},
+    "dayIcon":{"id":676,"type":"sprite","path":"sprites/DefineSprite_676/1.svg","parts":[675]},
+    "energyHeart":{"id":261,"type":"sprite","path":"sprites/DefineSprite_261/1.svg","x":552.1,"y":33.3,"parts":[257,258,259,260]},
+    "toolPanel":{"id":335,"type":"sprite","path":"sprites/DefineSprite_335/1.svg","x":365.1,"y":334.05},
+    "chickenToolPanel":{"id":504,"type":"sprite","path":"sprites/DefineSprite_504/1.svg","x":365.1,"y":334.05},
+    "fertilizerCounter":{"id":306,"type":"sprite","path":"sprites/DefineSprite_306/1.svg","x":100.25,"y":44.6},
+    "bugKillerCounter":{"id":310,"type":"sprite","path":"sprites/DefineSprite_310/1.svg","x":100.9,"y":44.6}
+  },
+  "buttons": {
+    "backToFarm":{"id":663,"path":"buttons/DefineButton2_663/1.svg"},
+    "saveGame":{"id":667,"path":"buttons/DefineButton2_667/1.svg"},
+    "backToMenu":{"id":671,"path":"buttons/DefineButton2_671/1.svg"},
+    "continue":{"id":842,"path":"buttons/DefineButton2_842/1.svg"},
+    "ok":{"id":847,"path":"buttons/DefineButton2_847/1.svg"},
+    "endDay":{"id":272,"path":"buttons/DefineButton2_272/1.svg","x":299.7,"y":353.45,"note":"overview hit area; day/alarm art is Button680 / Sprite676"},
+    "dayAlarm":{"id":680,"path":"buttons/DefineButton2_680/1.svg"},
+    "seedShopItems":{"ids":[736,737,738,739,740,741,742,743],"paths":"buttons/DefineButton2_<id>/1.svg"},
+    "itemShop":{"ids":[779,780],"paths":"buttons/DefineButton2_<id>/1.svg"},
+    "chickenShop":{"ids":[837,838],"paths":"buttons/DefineButton2_<id>/1.svg"},
+    "overviewHitAreas":{"ids":[227,230,233,238,242,256,270,272],"note":"several are intentionally invisible hit areas; use exact placements in scene-display-lists.json#15"}
+  },
+  "soilGrid": {
+    "tileArt":{"id":280,"type":"sprite","path":"sprites/DefineSprite_280/1.svg"},
+    "plot20":[[356.25,72.25],[457.2,118.6],[554.75,169.75],[260.7,124.5],[361.65,170.85],[459.2,222.0],[157.75,174.85],[258.7,221.2],[356.25,272.35],[59.95,222.75],[159.7,273.45],[257.25,324.6]],
+    "plot30":[[333.25,83.25],[434.2,129.6],[531.75,180.75],[237.7,135.5],[338.65,181.85],[436.2,233.0],[134.75,185.85],[235.7,232.2],[333.25,283.35],[36.95,233.75],[136.7,284.45],[234.25,335.6]],
+    "cropOverlay":{"id":219,"type":"sprite","note":"12 instances and clickable button IDs differ by plot; exact x/y/name are in scene-display-lists.json frames 20/25/30/35"}
+  },
+  "reuse": {
+    "wholeScenes":"Every frames/<n>.svg is a self-contained exact SVG and is the fastest original-look path.",
+    "simpleSingleAssets":["sprites/DefineSprite_69/1.svg","sprites/DefineSprite_247/1.svg","sprites/DefineSprite_261/1.svg","sprites/DefineSprite_280/1.svg","sprites/DefineSprite_335/1.svg","sprites/DefineSprite_399/1.svg","sprites/DefineSprite_504/1.svg"],
+    "complexScenes":"Frames 5,15,20,25,30,35,50,60,65,70,75,80 are layered compositions; use their whole-frame SVG or rebuild from scene-display-lists.json."
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "coordinateSpace": "600x420",
+  "bounds": "axis-aligned stage-space bounds of DefineButton2 hit-test geometry after all parent matrices; movieclip release handlers use the placed sprite visual bounds",
+  "frame": {
+    "15": [
+      {"role":"goto:field1","buttonId":227,"x":21.7,"y":146.05,"w":272.65,"h":233.25},
+      {"role":"goto:field2","buttonId":272,"x":171.3,"y":249.75,"w":272.65,"h":251.55},
+      {"role":"goto:field3","buttonId":230,"x":302.15,"y":24.85,"w":271.8,"h":196.2},
+      {"role":"goto:field4","buttonId":233,"x":492.8,"y":135.6,"w":267.45,"h":183.05},
+      {"role":"goto:coop","buttonId":242,"x":224.0,"y":-48.95,"w":225.7,"h":160.6},
+      {"role":"goto:village","buttonId":256,"x":397.0,"y":285.25,"w":275.05,"h":147.2},
+      {"role":"goto:house","buttonId":238,"x":32.45,"y":-12.7,"w":217.6,"h":173.8}
+    ],
+    "20": [
+      {"role":"tile:1","buttonId":289,"x":-38.05,"y":174.25,"w":195.35,"h":98.25},
+      {"role":"tile:2","buttonId":290,"x":60.55,"y":123.95,"w":195.35,"h":98.25},
+      {"role":"tile:3","buttonId":291,"x":158.1,"y":73.2,"w":195.35,"h":98.25},
+      {"role":"tile:4","buttonId":292,"x":258.2,"y":22.0,"w":195.35,"h":98.25},
+      {"role":"tile:5","buttonId":293,"x":60.45,"y":225.45,"w":195.35,"h":98.25},
+      {"role":"tile:6","buttonId":294,"x":159.05,"y":175.15,"w":195.35,"h":98.25},
+      {"role":"tile:7","buttonId":295,"x":256.6,"y":124.4,"w":195.35,"h":98.25},
+      {"role":"tile:8","buttonId":296,"x":356.7,"y":73.2,"w":195.35,"h":98.25},
+      {"role":"tile:9","buttonId":297,"x":164.6,"y":275.15,"w":195.35,"h":98.25},
+      {"role":"tile:10","buttonId":298,"x":263.2,"y":224.85,"w":195.35,"h":98.25},
+      {"role":"tile:11","buttonId":299,"x":360.75,"y":174.1,"w":195.35,"h":98.25},
+      {"role":"tile:12","buttonId":300,"x":460.85,"y":122.9,"w":195.35,"h":98.25},
+      {"role":"tool:pick","buttonId":317,"x":137.9,"y":298.35,"w":116.65,"h":109.2},
+      {"role":"tool:water","buttonId":319,"x":178.25,"y":295.75,"w":162.8,"h":111.8},
+      {"role":"tool:fertilizer","buttonId":323,"x":268.4,"y":269.0,"w":148.5,"h":139.25},
+      {"role":"tool:spray","buttonId":327,"x":299.2,"y":269.7,"w":118.2,"h":135.75},
+      {"role":"tool:cut","buttonId":329,"x":375.55,"y":310.45,"w":109.8,"h":94.55},
+      {"role":"home","buttonId":331,"x":507.9,"y":312.65,"w":77.65,"h":101.5},
+      {"role":"plant","buttonId":340,"x":8.05,"y":312.2,"w":130.2,"h":105.1},
+      {"role":"sell-bin","buttonId":286,"sourceType":"movieclip","x":1.77,"y":282.28,"w":105.62,"h":71.44}
+    ],
+    "40": [
+      {"role":"tool:pick-egg","buttonId":317,"x":317.75,"y":298.35,"w":116.65,"h":109.2},
+      {"role":"tool:feed","buttonId":503,"x":289.3,"y":275.1,"w":170.8,"h":133.15},
+      {"role":"home","buttonId":331,"x":507.9,"y":312.65,"w":77.65,"h":101.5},
+      {"role":"feed-chickens","buttonId":506,"x":253.35,"y":19.3,"w":268.6,"h":161.1},
+      {"role":"pick-egg:1","buttonId":152,"sourceType":"movieclip","x":61.95,"y":223.4,"w":19.2,"h":25.15},
+      {"role":"pick-egg:2","buttonId":152,"sourceType":"movieclip","x":413.95,"y":205.1,"w":19.2,"h":25.15},
+      {"role":"pick-egg:3","buttonId":152,"sourceType":"movieclip","x":207.75,"y":343.3,"w":19.2,"h":25.15},
+      {"role":"pick-egg:4","buttonId":152,"sourceType":"movieclip","x":141.9,"y":172.15,"w":19.2,"h":25.15},
+      {"role":"pick-egg:5","buttonId":152,"sourceType":"movieclip","x":219.5,"y":140.4,"w":19.2,"h":25.15},
+      {"role":"sell-eggs-bin","buttonId":286,"sourceType":"movieclip","x":17.07,"y":325.73,"w":105.62,"h":71.44}
+    ],
+    "50": [
+      {"role":"goto:seed-item-shop","buttonId":717,"x":-36.35,"y":72.95,"w":210.15,"h":191.5},
+      {"role":"goto:chicken-shop","buttonId":718,"x":117.1,"y":-10.4,"w":219.3,"h":189.25},
+      {"role":"goto:farm","buttonId":721,"x":-35.85,"y":300.1,"w":223.65,"h":134.1}
+    ],
+    "55": [
+      {"role":"buy-seed:turnip","buttonId":736,"x":181.19,"y":167.8,"w":53.93,"h":55.99},
+      {"role":"buy-seed:carrot","buttonId":737,"x":231.49,"y":164.0,"w":53.92,"h":59.96},
+      {"role":"buy-seed:potato","buttonId":738,"x":279.99,"y":169.79,"w":53.92,"h":53.93},
+      {"role":"buy-seed:tomato","buttonId":739,"x":327.54,"y":169.79,"w":53.92,"h":53.93},
+      {"role":"buy-seed:corn","buttonId":740,"x":179.48,"y":226.19,"w":53.92,"h":53.93},
+      {"role":"buy-seed:strawberry","buttonId":741,"x":231.49,"y":225.69,"w":53.92,"h":53.93},
+      {"role":"buy-seed:grape","buttonId":742,"x":280.84,"y":225.69,"w":53.92,"h":53.93},
+      {"role":"buy-seed:watermelon","buttonId":743,"x":329.04,"y":225.69,"w":53.92,"h":53.93},
+      {"role":"buy:fertilizer","buttonId":779,"x":424.25,"y":194.66,"w":61.97,"h":64.89},
+      {"role":"buy:bug-killer","buttonId":780,"x":487.8,"y":194.66,"w":61.97,"h":64.89},
+      {"role":"back:village","buttonId":784,"sourceType":"movieclip","x":470.8,"y":12.7,"w":109.85,"h":63.7}
+    ],
+    "60": [
+      {"role":"buy:chicken-feed","buttonId":837,"x":363.25,"y":198.86,"w":61.97,"h":64.89},
+      {"role":"buy:chicken","buttonId":838,"x":267.9,"y":197.26,"w":61.82,"h":64.84},
+      {"role":"back:village","buttonId":784,"sourceType":"movieclip","x":470.8,"y":12.7,"w":109.85,"h":63.7}
+    ],
+    "80": [
+      {"role":"goto:cover","buttonId":847,"x":461.7,"y":312.7,"w":132.25,"h":88.55}
+    ]
+  }
+}

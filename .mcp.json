@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "oracle": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--add-host=host.docker.internal:host-gateway",
+        "-e",
+        "OLLAMA_BASE_URL=http://host.docker.internal:11434",
+        "-e",
+        "ORACLE_API=http://host.docker.internal:47778",
+        "-e",
+        "ORACLE_LOG_TARGET=stderr",
+        "-v",
+        "tmx-oracle-data:/data",
+        "ghcr.io/soul-brews-studio/arra-oracle-v3:stdio"
+      ]
+    }
+  }
+}

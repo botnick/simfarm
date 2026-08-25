@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/l22/.tmx/session-start-hook.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/l22/.tmx/claude-stop-relay.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/l22/bot/upstream/arra-safety-hooks/safety-check.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "enableAllProjectMcpServers": true
+}

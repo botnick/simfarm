@@ -1,0 +1,41 @@
+{
+  "name": "sim-farm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "sim": "node tools/sim.mjs",
+    "test": "node tools/test.mjs",
+    "assets": "node ../tools/prep-assets.mjs",
+    "e2e": "node tools/e2e.mjs",
+    "fonts": "node tools/fetch-fonts.mjs \"Mitr:wght@400;600\" \"Noto Sans Thai:wght@400;700\"",
+    "mobile": "node tools/mobile.mjs",
+    "gen-prep": "../tools/.venv/bin/python ../tools/prep-generated.py",
+    "regions": "node tools/regions.mjs",
+    "server": "node ../server/index.mjs",
+    "test:server": "node ../server/test.mjs",
+    "online": "node tools/online.mjs",
+    "soak": "node tools/soak.mjs",
+    "facade": "node tools/facade.mjs",
+    "durable": "node ../server/durable.mjs",
+    "reach": "node tools/reach.mjs",
+    "play": "node tools/playthrough.mjs",
+    "deployed": "node tools/deployed.mjs",
+    "deployed:mobile": "node tools/deployed-mobile.mjs",
+    "pace": "node tools/pace.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.8.0",
+    "vite": "^8.2.2"
+  },
+  "type": "module"
+}

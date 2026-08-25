@@ -1,0 +1,1015 @@
+{
+  "meta": {
+    "title": "SIM FARM",
+    "shopName": "BRUDEEN",
+    "credit": "After the Flash game by w_w (DailyFreeGames.com). Rules recovered from the original SWF."
+  },
+  "_editing": "This file is the whole game. Add a crop, an animal, a recipe or a good here and it appears in the shop, the field and the workshop — no code changes. Art keys point at game/public/assets; `tint` recolours a borrowed sprite.",
+  "rules": {
+    "startMoney": 400,
+    "startEnergy": 100,
+    "startDay": 1,
+    "endDay": null,
+    "plots": 4,
+    "tilesPerPlot": 12,
+    "travelEnergy": 5,
+    "stage": {
+      "seed": 1,
+      "ripe": 5,
+      "dead": 6,
+      "empty": 12
+    },
+    "pest": {
+      "spawnStage": 4,
+      "spawnChance": 0.1,
+      "deathChance": 0.3333
+    },
+    "fertilizer": {
+      "maxSafe": 2,
+      "growthTicks": 1
+    },
+    "rain": {
+      "chance": 0.05
+    },
+    "_endDay": "null = endless. Set a number (the original used 365) to finish the game on that day and show the summary screen.",
+    "market": {
+      "_note": "Selling the same crop over and over in one week floods the market, so the price falls in tiers. Weekly orders pull the other way: they pay a premium for a specific crop. Together they make crop choice a decision again in a game that never ends.",
+      "weekLength": 7,
+      "seasonLength": 28,
+      "orderCount": 3,
+      "orderQuota": 12,
+      "orderMultiplier": 1.5,
+      "tiers": [
+        {
+          "upTo": 24,
+          "multiplier": 1
+        },
+        {
+          "upTo": 48,
+          "multiplier": 0.8
+        },
+        {
+          "upTo": null,
+          "multiplier": 0.6
+        }
+      ]
+    },
+    "barn": {
+      "_note": "Only the surplus above softCap spoils, so a full barn is safe and hoarding for a perfect week is not.",
+      "softCap": 48,
+      "spoilRate": 0.25
+    },
+    "rescue": {
+      "_note": "A side game must never become unplayable. If the player has no money, no seeds, nothing growing and nothing to sell, they are given one cheap seed back.",
+      "cropId": "turnip"
+    },
+    "feedEnergy": 1,
+    "_feedEnergy": "Energy per animal fed. Without this a full barn of animals is income for no effort."
+  },
+  "tools": [
+    {
+      "id": "harvest",
+      "name": {
+        "en": "Pick",
+        "th": "เก็บเกี่ยว"
+      },
+      "energy": 1
+    },
+    {
+      "id": "water",
+      "name": {
+        "en": "Water",
+        "th": "รดน้ำ"
+      },
+      "energy": 1
+    },
+    {
+      "id": "fertilize",
+      "name": {
+        "en": "Fertilizer",
+        "th": "ใส่ปุ๋ย"
+      },
+      "energy": 1,
+      "consumes": "fertilizer"
+    },
+    {
+      "id": "spray",
+      "name": {
+        "en": "Spray",
+        "th": "พ่นยา"
+      },
+      "energy": 1,
+      "consumes": "pesticide"
+    },
+    {
+      "id": "clear",
+      "name": {
+        "en": "Cut",
+        "th": "ถางทิ้ง"
+      },
+      "energy": 1
+    }
+  ],
+  "supplies": [
+    {
+      "id": "fertilizer",
+      "name": {
+        "en": "Fertilizer",
+        "th": "ปุ๋ย"
+      },
+      "price": 200,
+      "amount": 50,
+      "desc": {
+        "en": "Makes a plant grow faster. Never use it more than twice on one tile.",
+        "th": "เร่งให้ต้นไม้โตเร็วขึ้น อย่าใส่เกิน 2 ครั้งต่อช่องเด็ดขาด"
+      }
+    },
+    {
+      "id": "pesticide",
+      "name": {
+        "en": "Bug Killer",
+        "th": "ยาฆ่าแมลง"
+      },
+      "price": 200,
+      "amount": 20,
+      "desc": {
+        "en": "Spray a tile that caught a bug.",
+        "th": "พ่นใส่ช่องที่มีหนอนลง"
+      }
+    },
+    {
+      "id": "grain",
+      "name": {
+        "en": "Grain",
+        "th": "อาหารเมล็ด"
+      },
+      "price": 200,
+      "amount": 20,
+      "desc": {
+        "en": "Ducks and chickens eat this. Grind it yourself from corn or turnips.",
+        "th": "อาหารของเป็ดและไก่ บดเองจากข้าวโพดหรือหัวผักกาดก็ได้"
+      },
+      "image": "supply-grain"
+    },
+    {
+      "id": "hay",
+      "name": {
+        "en": "Hay",
+        "th": "ฟาง"
+      },
+      "price": 260,
+      "amount": 20,
+      "desc": {
+        "en": "What a sheep wants. Any spare crop can be dried into it.",
+        "th": "อาหารของแกะ พืชเหลือ ๆ เอามาตากเป็นฟางได้"
+      },
+      "image": "supply-hay"
+    },
+    {
+      "id": "fodder",
+      "name": {
+        "en": "Fodder",
+        "th": "อาหารข้น"
+      },
+      "price": 340,
+      "amount": 20,
+      "desc": {
+        "en": "Rich feed for cattle, and the only thing a cow will settle for.",
+        "th": "อาหารบำรุงสำหรับวัว วัวกินอย่างอื่นไม่ได้"
+      },
+      "image": "supply-fodder"
+    }
+  ],
+  "animals": [
+    {
+      "id": "duck",
+      "name": {
+        "en": "Duck",
+        "th": "เป็ด"
+      },
+      "art": "duck",
+      "price": 600,
+      "max": 5,
+      "feed": "grain",
+      "starveChance": 0.1,
+      "produces": "duckegg",
+      "unlockLevel": 3,
+      "desc": {
+        "en": "Cheap, cheerful, and lays every day it is fed.",
+        "th": "ถูก เลี้ยงง่าย ให้ไข่ทุกวันที่ได้กิน"
+      },
+      "image": "animal-duck"
+    },
+    {
+      "id": "chicken",
+      "name": {
+        "en": "Chicken",
+        "th": "ไก่"
+      },
+      "art": "chicken",
+      "price": 1000,
+      "max": 5,
+      "feed": "grain",
+      "starveChance": 0.1,
+      "produces": "egg",
+      "unlockLevel": 4,
+      "desc": {
+        "en": "Lays one egg a day, as long as it is fed.",
+        "th": "ออกไข่วันละฟอง ถ้าให้อาหารครบ"
+      }
+    },
+    {
+      "id": "sheep",
+      "name": {
+        "en": "Sheep",
+        "th": "แกะ"
+      },
+      "art": "sheep",
+      "price": 1800,
+      "max": 4,
+      "feed": "hay",
+      "starveChance": 0.08,
+      "produces": "wool",
+      "unlockLevel": 9,
+      "desc": {
+        "en": "Hardier than a bird, and the wool is worth the wait.",
+        "th": "ทนกว่าสัตว์ปีก และขนแกะคุ้มค่ารอ"
+      },
+      "image": "animal-sheep"
+    },
+    {
+      "id": "cow",
+      "name": {
+        "en": "Cow",
+        "th": "วัว"
+      },
+      "art": "cow",
+      "price": 3000,
+      "max": 3,
+      "feed": "fodder",
+      "starveChance": 0.06,
+      "produces": "milk",
+      "unlockLevel": 12,
+      "desc": {
+        "en": "The most you can get from one animal in a day.",
+        "th": "ให้ผลผลิตต่อวันสูงที่สุดในบรรดาสัตว์ทั้งหมด"
+      },
+      "image": "animal-cow"
+    }
+  ],
+  "goods": [
+    {
+      "id": "duckegg",
+      "name": {
+        "en": "Duck Egg",
+        "th": "ไข่เป็ด"
+      },
+      "price": 30,
+      "color": "#e8ddc0",
+      "from": "coop",
+      "image": "duckegg"
+    },
+    {
+      "id": "wool",
+      "name": {
+        "en": "Wool",
+        "th": "ขนแกะ"
+      },
+      "price": 70,
+      "color": "#f2ece1",
+      "from": "coop",
+      "image": "wool"
+    },
+    {
+      "id": "milk",
+      "name": {
+        "en": "Milk",
+        "th": "นม"
+      },
+      "price": 110,
+      "color": "#fdfdfa",
+      "from": "coop",
+      "image": "milk"
+    },
+    {
+      "id": "egg",
+      "name": {
+        "en": "Egg",
+        "th": "ไข่"
+      },
+      "price": 50,
+      "color": "#f6e7c1",
+      "from": "coop",
+      "art": "egg"
+    },
+    {
+      "id": "sunoil",
+      "name": {
+        "en": "Sunflower Oil",
+        "th": "น้ำมันทานตะวัน"
+      },
+      "price": 560,
+      "color": "#f2c14e",
+      "image": "sunoil"
+    },
+    {
+      "id": "sauce",
+      "name": {
+        "en": "Tomato Sauce",
+        "th": "ซอสมะเขือเทศ"
+      },
+      "price": 650,
+      "color": "#c0392b",
+      "image": "sauce"
+    },
+    {
+      "id": "jam",
+      "name": {
+        "en": "Strawberry Jam",
+        "th": "แยมสตรอว์เบอร์รี"
+      },
+      "price": 780,
+      "color": "#d94f70",
+      "image": "jam"
+    },
+    {
+      "id": "pie",
+      "name": {
+        "en": "Pumpkin Pie",
+        "th": "พายฟักทอง"
+      },
+      "price": 980,
+      "color": "#e08a1e",
+      "image": "pie"
+    },
+    {
+      "id": "melonjuice",
+      "name": {
+        "en": "Melon Juice",
+        "th": "น้ำแตงโม"
+      },
+      "price": 980,
+      "color": "#7ac74f",
+      "image": "melonjuice"
+    },
+    {
+      "id": "wine",
+      "name": {
+        "en": "Grape Juice",
+        "th": "น้ำองุ่น"
+      },
+      "price": 1250,
+      "color": "#6c3483",
+      "image": "wine"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "compost",
+      "name": {
+        "en": "Compost",
+        "th": "ปุ๋ยหมัก"
+      },
+      "energy": 4,
+      "days": 0,
+      "inputs": [
+        {
+          "anyCrop": 4
+        }
+      ],
+      "output": {
+        "supply": "fertilizer",
+        "amount": 15
+      },
+      "desc": {
+        "en": "Any four crops rot down into fertilizer. Cheaper than the shop.",
+        "th": "พืชอะไรก็ได้ 4 หน่วย หมักเป็นปุ๋ย ถูกกว่าซื้อจากร้าน"
+      }
+    },
+    {
+      "id": "cornfeed",
+      "name": {
+        "en": "Corn Grain",
+        "th": "อาหารจากข้าวโพด"
+      },
+      "energy": 3,
+      "days": 0,
+      "inputs": [
+        {
+          "crop": "corn",
+          "amount": 3
+        }
+      ],
+      "output": {
+        "supply": "grain",
+        "amount": 24
+      },
+      "desc": {
+        "en": "Grind corn into grain and stop paying the shop for it.",
+        "th": "บดข้าวโพดเป็นอาหารสัตว์ ไม่ต้องเสียเงินซื้อ"
+      }
+    },
+    {
+      "id": "turnipfeed",
+      "name": {
+        "en": "Turnip Grain",
+        "th": "อาหารจากหัวผักกาด"
+      },
+      "energy": 3,
+      "days": 0,
+      "inputs": [
+        {
+          "crop": "turnip",
+          "amount": 5
+        }
+      ],
+      "output": {
+        "supply": "grain",
+        "amount": 16
+      },
+      "desc": {
+        "en": "Turnips work too, if corn is not to hand.",
+        "th": "ใช้หัวผักกาดแทนก็ได้ ถ้าข้าวโพดไม่พอ"
+      }
+    },
+    {
+      "id": "hay",
+      "name": {
+        "en": "Dried Hay",
+        "th": "ฟางแห้ง"
+      },
+      "energy": 3,
+      "days": 1,
+      "inputs": [
+        {
+          "anyCrop": 4
+        }
+      ],
+      "output": {
+        "supply": "hay",
+        "amount": 10
+      },
+      "desc": {
+        "en": "Spare crops, dried for a day. Somewhere for a glut to go.",
+        "th": "พืชเหลือ ๆ ตากหนึ่งวัน ทางออกของผลผลิตล้น"
+      }
+    },
+    {
+      "id": "fodder",
+      "name": {
+        "en": "Rich Fodder",
+        "th": "อาหารข้นบำรุง"
+      },
+      "energy": 4,
+      "days": 1,
+      "inputs": [
+        {
+          "crop": "corn",
+          "amount": 3
+        },
+        {
+          "crop": "pumpkin",
+          "amount": 1
+        }
+      ],
+      "output": {
+        "supply": "fodder",
+        "amount": 24
+      },
+      "desc": {
+        "en": "Corn and pumpkin, for the animals that earn the most.",
+        "th": "ข้าวโพดกับฟักทอง สำหรับสัตว์ที่ให้ผลผลิตสูงสุด"
+      }
+    },
+    {
+      "id": "chilispray",
+      "name": {
+        "en": "Chili Spray",
+        "th": "ยาพริก"
+      },
+      "energy": 3,
+      "days": 1,
+      "inputs": [
+        {
+          "crop": "chili",
+          "amount": 2
+        }
+      ],
+      "output": {
+        "supply": "pesticide",
+        "amount": 8
+      },
+      "desc": {
+        "en": "The crop the bugs love most, turned against them.",
+        "th": "พืชที่หนอนรักที่สุด เอามาปราบหนอนซะเลย"
+      }
+    },
+    {
+      "id": "sunoil",
+      "name": {
+        "en": "Sunflower Oil",
+        "th": "น้ำมันทานตะวัน"
+      },
+      "energy": 3,
+      "days": 1,
+      "inputs": [
+        {
+          "crop": "sunflower",
+          "amount": 3
+        }
+      ],
+      "output": {
+        "good": "sunoil",
+        "amount": 1
+      },
+      "desc": {
+        "en": "Pressed slowly. Worth more than the seeds ever were.",
+        "th": "คั้นช้า ๆ ได้ราคาดีกว่าขายเมล็ดดิบมาก"
+      }
+    },
+    {
+      "id": "sauce",
+      "name": {
+        "en": "Tomato Sauce",
+        "th": "ซอสมะเขือเทศ"
+      },
+      "energy": 3,
+      "days": 1,
+      "inputs": [
+        {
+          "crop": "tomato",
+          "amount": 4
+        }
+      ],
+      "output": {
+        "good": "sauce",
+        "amount": 1
+      },
+      "desc": {
+        "en": "Four tomatoes, one long simmer.",
+        "th": "มะเขือเทศ 4 ลูก เคี่ยวหนึ่งรอบ"
+      }
+    },
+    {
+      "id": "jam",
+      "name": {
+        "en": "Strawberry Jam",
+        "th": "แยมสตรอว์เบอร์รี"
+      },
+      "energy": 3,
+      "days": 2,
+      "inputs": [
+        {
+          "crop": "strawberry",
+          "amount": 3
+        }
+      ],
+      "output": {
+        "good": "jam",
+        "amount": 1
+      },
+      "desc": {
+        "en": "Set it aside for two days and it sets.",
+        "th": "พักไว้สองวันแล้วมันจะเซ็ตตัว"
+      }
+    },
+    {
+      "id": "pie",
+      "name": {
+        "en": "Pumpkin Pie",
+        "th": "พายฟักทอง"
+      },
+      "energy": 4,
+      "days": 2,
+      "inputs": [
+        {
+          "crop": "pumpkin",
+          "amount": 2
+        },
+        {
+          "good": "egg",
+          "amount": 1
+        }
+      ],
+      "output": {
+        "good": "pie",
+        "amount": 1
+      },
+      "desc": {
+        "en": "Two pumpkins and an egg from your own coop.",
+        "th": "ฟักทองสองลูกกับไข่จากเล้าตัวเอง"
+      }
+    },
+    {
+      "id": "melonjuice",
+      "name": {
+        "en": "Melon Juice",
+        "th": "น้ำแตงโม"
+      },
+      "energy": 4,
+      "days": 2,
+      "inputs": [
+        {
+          "crop": "watermelon",
+          "amount": 1
+        }
+      ],
+      "output": {
+        "good": "melonjuice",
+        "amount": 1
+      },
+      "desc": {
+        "en": "One melon fills a lot of bottles.",
+        "th": "แตงโมลูกเดียวได้หลายขวด"
+      }
+    },
+    {
+      "id": "wine",
+      "name": {
+        "en": "Grape Juice",
+        "th": "น้ำองุ่น"
+      },
+      "energy": 4,
+      "days": 2,
+      "inputs": [
+        {
+          "crop": "grape",
+          "amount": 3
+        }
+      ],
+      "output": {
+        "good": "wine",
+        "amount": 1
+      },
+      "desc": {
+        "en": "The longest wait on the farm, pressed and rested.",
+        "th": "ของที่รอนานที่สุดในไร่ คั้นแล้วบ่มต่อ"
+      }
+    }
+  ],
+  "crops": [
+    {
+      "id": "turnip",
+      "name": {
+        "en": "Turnip",
+        "th": "หัวผักกาด"
+      },
+      "art": "turnip",
+      "seedPrice": 100,
+      "sellPrice": 52,
+      "daysPerStage": 1,
+      "harvests": 1,
+      "desc": {
+        "en": "Very easy to plant. Grows very fast.",
+        "th": "ปลูกง่ายที่สุด โตไวมาก เหมาะเริ่มต้น"
+      },
+      "unlockLevel": 1
+    },
+    {
+      "id": "radish",
+      "name": {
+        "en": "Radish",
+        "th": "แรดิช"
+      },
+      "art": "radish",
+      "seedPrice": 150,
+      "sellPrice": 35,
+      "daysPerStage": 1,
+      "harvests": 2,
+      "desc": {
+        "en": "Sprints out of the ground and gives you a second pick.",
+        "th": "โผล่พ้นดินไวมาก แถมเก็บได้สองรอบ"
+      },
+      "unlockLevel": 1,
+      "artFormat": "png"
+    },
+    {
+      "id": "carrot",
+      "name": {
+        "en": "Carrot",
+        "th": "แครอท"
+      },
+      "art": "carrot",
+      "seedPrice": 200,
+      "sellPrice": 67,
+      "daysPerStage": 1,
+      "harvests": 1,
+      "desc": {
+        "en": "Easy to plant and quick to pick.",
+        "th": "ปลูกง่าย เก็บไว ราคาพอใช้"
+      },
+      "unlockLevel": 1
+    },
+    {
+      "id": "potato",
+      "name": {
+        "en": "Potato",
+        "th": "มันฝรั่ง"
+      },
+      "art": "potato",
+      "seedPrice": 300,
+      "sellPrice": 138,
+      "daysPerStage": 2,
+      "harvests": 1,
+      "desc": {
+        "en": "Takes longer than a carrot, but sells for a lot more.",
+        "th": "ใช้เวลานานกว่าแครอท แต่ขายได้แพงกว่ามาก"
+      },
+      "unlockLevel": 3
+    },
+    {
+      "id": "sunflower",
+      "name": {
+        "en": "Sunflower",
+        "th": "ทานตะวัน"
+      },
+      "art": "sunflower",
+      "seedPrice": 450,
+      "sellPrice": 120,
+      "daysPerStage": 3,
+      "harvests": 3,
+      "desc": {
+        "en": "A steady middle-of-the-farm earner. Press it for oil.",
+        "th": "ตัวกลาง ๆ ที่นิ่งและไว้ใจได้ เอาไปคั้นน้ำมันได้"
+      },
+      "unlockLevel": 5,
+      "artFormat": "png"
+    },
+    {
+      "id": "tomato",
+      "name": {
+        "en": "Tomato",
+        "th": "มะเขือเทศ"
+      },
+      "art": "tomato",
+      "seedPrice": 500,
+      "sellPrice": 106,
+      "daysPerStage": 3,
+      "harvests": 4,
+      "desc": {
+        "en": "Slow to start, then gives you four pickings.",
+        "th": "เริ่มช้าหน่อย แต่เก็บได้ถึง 4 รอบ"
+      },
+      "unlockLevel": 5
+    },
+    {
+      "id": "corn",
+      "name": {
+        "en": "Corn",
+        "th": "ข้าวโพด"
+      },
+      "art": "corn",
+      "seedPrice": 600,
+      "sellPrice": 133,
+      "daysPerStage": 4,
+      "harvests": 5,
+      "desc": {
+        "en": "Needs patience, keeps giving, and grinds into feed.",
+        "th": "ต้องอดทน แต่เก็บได้ 5 รอบ และบดเป็นอาหารสัตว์ได้"
+      },
+      "unlockLevel": 7
+    },
+    {
+      "id": "chili",
+      "name": {
+        "en": "Chili",
+        "th": "พริก"
+      },
+      "art": "chili",
+      "seedPrice": 700,
+      "sellPrice": 77,
+      "daysPerStage": 2,
+      "harvests": 5,
+      "pest": {
+        "spawnChance": 0.2
+      },
+      "tags": [
+        {
+          "en": "bugs love it",
+          "th": "หนอนชอบ"
+        }
+      ],
+      "desc": {
+        "en": "Fast and generous — and the bugs love it twice as much.",
+        "th": "โตไวและให้เยอะ แต่หนอนชอบเป็นสองเท่า"
+      },
+      "unlockLevel": 7,
+      "artFormat": "png"
+    },
+    {
+      "id": "strawberry",
+      "name": {
+        "en": "Strawberry",
+        "th": "สตรอว์เบอร์รี"
+      },
+      "art": "strawberry",
+      "seedPrice": 800,
+      "sellPrice": 168,
+      "daysPerStage": 4,
+      "harvests": 4,
+      "desc": {
+        "en": "Harder to raise, but the price is high.",
+        "th": "เลี้ยงยากขึ้นมาหน่อย แต่ราคาดี"
+      },
+      "unlockLevel": 9
+    },
+    {
+      "id": "pumpkin",
+      "name": {
+        "en": "Pumpkin",
+        "th": "ฟักทอง"
+      },
+      "art": "pumpkin",
+      "seedPrice": 850,
+      "sellPrice": 317,
+      "daysPerStage": 5,
+      "harvests": 2,
+      "pest": {
+        "spawnChance": 0.03
+      },
+      "tags": [
+        {
+          "en": "bugs avoid it",
+          "th": "หนอนไม่แตะ"
+        }
+      ],
+      "desc": {
+        "en": "Slow and thick-skinned. Bugs rarely bother it.",
+        "th": "โตช้าแต่เปลือกหนา หนอนแทบไม่แตะ"
+      },
+      "unlockLevel": 10,
+      "artFormat": "png"
+    },
+    {
+      "id": "watermelon",
+      "name": {
+        "en": "Watermelon",
+        "th": "แตงโม"
+      },
+      "art": "watermelon",
+      "seedPrice": 900,
+      "sellPrice": 642,
+      "daysPerStage": 5,
+      "harvests": 1,
+      "desc": {
+        "en": "One enormous payday. Losing it to a bug really hurts.",
+        "th": "ก้อนเดียวได้เงินก้อนโต แต่ถ้าโดนหนอนคือเจ็บ"
+      },
+      "unlockLevel": 12
+    },
+    {
+      "id": "grape",
+      "name": {
+        "en": "Grape",
+        "th": "องุ่น"
+      },
+      "art": "grape",
+      "seedPrice": 1200,
+      "sellPrice": 272,
+      "daysPerStage": 6,
+      "harvests": 6,
+      "desc": {
+        "en": "The longest wait on the farm — and six harvests of profit.",
+        "th": "รอนานที่สุดในไร่ แลกกับกำไร 6 รอบ"
+      },
+      "unlockLevel": 13
+    }
+  ],
+  "_generatedArt": "goods with an `image` are drawn from game/public/assets/goods/<image>.png, produced by tools/gen-art.mjs and cut out by tools/prep-generated.py. Goods without one fall back to a drawn jar in the good's colour.",
+  "progression": {
+    "_note": "Experience never gets spent, so it is a record of what the farm has done rather than a second currency. Thresholds are cumulative: factor * level * (level - 1). The numbers are set by tools/pace.mjs, which measures how many days of decent play it takes before each crop and animal becomes available at all — content nobody reaches may as well not exist, and a quadratic curve is very easy to write in a way that puts half the game behind a year.",
+    "thresholdFactor": 7,
+    "xp": {
+      "_note": "Weighted so variety pays without becoming compulsory. A twelve-unit order earns one field-worth of picking on top of its money premium — material, and explainable in a sentence. Feeding is once for the whole flock, not once per kind, or keeping one of everything becomes an experience multiplier rather than a choice about farming.",
+      "harvestTile": 3,
+      "craft": 12,
+      "order": 12,
+      "feedAll": 8
+    },
+    "grants": {
+      "_note": "The farm itself grows with the level, for ever. Every unlock has a last one, so without this the game stops having anything new to say around level 13 and the level number becomes decoration. Energy and the yard grow without a ceiling because they are one system: each step adds four energy and room for one more of each kind, and feeding four more animals costs about the four energy it just gave, so the day gets larger rather than easier. The barn has a ceiling at barnSoftCapMax times the base, because storage that kept growing would let a player hold half a year of one crop and drip it out under the flooding threshold — which is the exact pressure the market rules exist to apply.",
+      "every": 4,
+      "energy": 4,
+      "barnSoftCap": 8,
+      "animalMax": 1,
+      "barnSoftCapMax": 3
+    },
+    "milestoneEvery": 10
+  },
+  "milestones": [
+    {
+      "id": "first-harvest",
+      "when": "harvest",
+      "name": {
+        "en": "First Harvest",
+        "th": "เก็บเกี่ยวครั้งแรก"
+      }
+    },
+    {
+      "id": "first-craft",
+      "when": "craft",
+      "name": {
+        "en": "First Batch",
+        "th": "แปรรูปครั้งแรก"
+      }
+    },
+    {
+      "id": "first-animal",
+      "when": "animal",
+      "name": {
+        "en": "First Chicken",
+        "th": "ไก่ตัวแรก"
+      }
+    },
+    {
+      "id": "level-5",
+      "when": "level",
+      "level": 5,
+      "name": {
+        "en": "Level 5",
+        "th": "เลเวล 5"
+      }
+    },
+    {
+      "id": "level-10",
+      "when": "level",
+      "level": 10,
+      "name": {
+        "en": "Level 10",
+        "th": "เลเวล 10"
+      }
+    },
+    {
+      "id": "level-15",
+      "when": "level",
+      "level": 15,
+      "name": {
+        "en": "Level 15",
+        "th": "เลเวล 15"
+      }
+    },
+    {
+      "id": "level-20",
+      "when": "level",
+      "level": 20,
+      "name": {
+        "en": "Level 20",
+        "th": "เลเวล 20"
+      }
+    },
+    {
+      "id": "season-25k",
+      "when": "season",
+      "earned": 25000,
+      "name": {
+        "en": "A Rich Season",
+        "th": "ฤดูกาลทองคำ"
+      }
+    }
+  ],
+  "_milestones": "One-time achievements the host game can reward. Each has a stable id so a host can grant a reward exactly once.",
+  "audio": {
+    "_note": "Cue names are file names in assets/sfx. Adding a cue is a line here plus the file; nothing in the code lists them.",
+    "volume": {
+      "sfx": 0.55,
+      "music": 0.22
+    },
+    "sfx": [
+      "button-press",
+      "tab-switch",
+      "screen-change",
+      "buy-spend",
+      "money-received",
+      "harvest",
+      "feed-animals",
+      "tool-hoe",
+      "tool-water",
+      "tool-fertilise",
+      "tool-pesticide",
+      "tool-pick",
+      "animal-duck",
+      "animal-chicken",
+      "animal-sheep",
+      "animal-cow",
+      "craft-started",
+      "craft-finished",
+      "level-up",
+      "new-morning",
+      "rain-overnight",
+      "pest-appears",
+      "refused"
+    ],
+    "music": {
+      "farm": "ambient-farm-day",
+      "village": "ambient-village-shop"
+    },
+    "toolCue": {
+      "hoe": "tool-hoe",
+      "water": "tool-water",
+      "fertilize": "tool-fertilise",
+      "spray": "tool-pesticide",
+      "harvest": "tool-pick",
+      "clear": "tool-hoe"
+    }
+  }
+}

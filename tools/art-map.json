@@ -1,0 +1,141 @@
+{
+  "_note": "Character IDs decoded from the SWF. A crop's DefineSprite master is authoritative: its frame number IS the tile state (1 seed, 2-4 growing, 5 ripe, 6 dead, 7+ empty). prep-assets strips the caterpillar out of the growing frame, and drops `dropIds` from the scene plates.",
+  "cropMasters": {
+    "turnip": 177,
+    "carrot": 182,
+    "potato": 188,
+    "tomato": 193,
+    "corn": 199,
+    "strawberry": 207,
+    "grape": 212,
+    "watermelon": 217
+  },
+  "cropStages": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "spriteFrames": {
+    "pest": [
+      174,
+      1
+    ],
+    "egg": [
+      152,
+      1
+    ],
+    "rain": [
+      222,
+      1
+    ],
+    "chicken": [
+      500,
+      1
+    ],
+    "chicken_2": [
+      500,
+      2
+    ],
+    "chicken_3": [
+      500,
+      3
+    ],
+    "chicken_4": [
+      500,
+      4
+    ],
+    "tool_harvest": [
+      153,
+      2
+    ],
+    "tool_water": [
+      153,
+      3
+    ],
+    "tool_fertilize": [
+      153,
+      4
+    ],
+    "tool_spray": [
+      153,
+      5
+    ],
+    "tool_clear": [
+      153,
+      6
+    ],
+    "hud_money": [
+      399,
+      1
+    ],
+    "hud_heart": [
+      261,
+      1
+    ],
+    "hud_tools": [
+      335,
+      1
+    ],
+    "hud_daymoney": [
+      247,
+      1
+    ],
+    "soil": [
+      280,
+      1
+    ],
+    "energy_fill": [
+      259,
+      1
+    ],
+    "supply_fertilizer": [
+      119,
+      1
+    ],
+    "supply_pesticide": [
+      124,
+      1
+    ],
+    "supply_feed": [
+      134,
+      1
+    ]
+  },
+  "sounds": {
+    "bg.mp3": "1_bgsound.mp3",
+    "click.mp3": "400.mp3",
+    "chime.mp3": "511.mp3",
+    "pop.mp3": "74.mp3"
+  },
+  "scenes": {
+    "menu": 5,
+    "farm": 15,
+    "plot1": 20,
+    "plot2": 25,
+    "plot3": 30,
+    "plot4": 35,
+    "coop": 40,
+    "village": 50,
+    "shop": 55,
+    "shop_animal": 60
+  },
+  "dropIds": [
+    69
+  ],
+  "scenesDir": "frames-ui",
+  "scenesFallbackDir": "frames-bg",
+  "fonts": {
+    "fat.ttf": "112_Fat.ttf"
+  },
+  "scenesFromBg": {
+    "menu": 15
+  },
+  "supplyFallback": {
+    "grain": "supply_feed",
+    "hay": "supply_feed",
+    "fodder": "supply_feed"
+  }
+}
