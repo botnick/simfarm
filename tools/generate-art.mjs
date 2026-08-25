@@ -11,22 +11,40 @@
 //
 // Output lands in generated/<name>.png on flat white, which is what
 // tools/prep-generated.py expects to cut.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT = join(HERE, '../generated')
 
-// The house style, in the terms a drawing model responds to.
+// The house style, measured off the reference art rather than argued about.
+//
+// The written guide and the pictures supplied with it disagree. The guide says
+// flat colour and no gradient; the pictures have between sixty and a hundred
+// and fifteen distinct tones inside their shapes, which is shading. Sampling
+// them settled it — and settled two other things words had been failing at:
+//
+//   their outline is 23-29% of the drawing, and mine was 10.7%
+//   their outline is #271409 to #572d14, darker than the #4a3222 in the guide
+//
+// So the pictures win on finish and weight, the guide wins on palette and
+// shape, and the numbers are stated here rather than described.
+//
+// The size lines stay: the model draws at 1024 and the game shows about 80.
 const STYLE = [
-  'flat 2D vector cartoon illustration, children\'s farming game art',
-  'thick uniform black outline of even weight around every shape',
-  'flat solid colour fill with exactly one lighter highlight shape per form, no gradients, no texture, no shading ramps',
-  'bright saturated friendly palette',
-  'single object centred, seen from a low three-quarter angle',
-  'soft grey elliptical drop shadow on the ground beneath it',
-  'pure white background, nothing else in frame, no text, no border, no watermark',
+  'cute chunky cartoon game asset, warm and friendly, polished mobile game quality',
+  'VERY THICK dark warm brown outline, colour #2e1608, never black and never grey — the outline should take up about a quarter of the whole drawing, far thicker than looks normal',
+  'smooth shading inside each shape, a darker warm tone gathering along the inside of the outline and a soft light on top, giving real roundness',
+  'a small crisp glossy highlight on each curved surface',
+  'round chubby forms, no sharp corners anywhere',
+  'warm saturated palette — leaf greens #6fb54a and #5da03f, cream #f7e7c5, warm brown #a5683c, orange #f2a541',
+  'bold and simple: six or seven large shapes in the whole drawing, no fine detail, no thin lines, no hatching',
+  'seen from above at a slight angle, wide low silhouette',
+  'a soft dark elliptical shadow on the ground beneath it',
+  'IT MUST STILL READ CLEARLY WHEN SHRUNK TO 80 PIXELS WIDE — draw it bold enough for that',
+  'pure white background, nothing else in frame, no text, no border, no watermark, no frame',
+  'match the outline weight, outline colour and finish of the attached reference exactly — this belongs beside it',
 ].join(', ')
 
 const env = Object.fromEntries(
@@ -39,10 +57,29 @@ if (!API || !KEY) { console.error('SNAPGEN_API and SNAPGEN_KEY must be in .env.l
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
 
+/**
+ * A drawing of ours to hold the style to.
+ *
+ * Words only get so far: three runs of the same prompt gave three different
+ * outline weights and three different layouts. A picture settles it — but it
+ * has to be a picture we own. Handing the model the original game's sprite and
+ * asking for something like it produces a derivative of that sprite, which is
+ * the exact thing this whole exercise exists to avoid.
+ *
+ * The reference here is the project owner's own work, supplied as the look this
+ * game should share. It anchors the outline colour, the shading and the gloss,
+ * which words alone kept failing to pin down.
+ */
+const REFERENCE = join(HERE, '../generated/_style/trophy.png')
+
 async function draw(name, subject) {
   const body = new FormData()
   body.set('model', 'nano-banana-pro')
   body.set('prompt', `${subject}. ${STYLE}`)
+  if (existsSync(REFERENCE)) {
+    const png = readFileSync(REFERENCE)
+    body.set('image', new Blob([png], { type: 'image/png' }), 'reference.png')
+  }
   const started = await fetch(`${API}/generate_image`, {
     method: 'POST', headers: { 'x-api-key': KEY }, body,
   }).then(r => r.json())
