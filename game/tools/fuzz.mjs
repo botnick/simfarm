@@ -1,0 +1,224 @@
+// Play the farm at random, for a long time, and insist it stays a farm.
+//
+// Every bug worth finding in this game so far has been the same shape: a state
+// the rules could reach and nothing could get out of, or a number that stopped
+// being a number. Withered ground that could not be cleared. A counter that had
+// never been created, so buying one left NaN spreading through every total it
+// touched. Each was found by hand, one at a time, by playing far enough in.
+//
+// So this plays much further in than a person would, choosing among whatever is
+// legal at the time, and after every single call asks whether the farm is still
+// a thing the game can describe: no NaN anywhere, nothing negative that counts
+// things, nothing fractional, energy inside the farm's own limit, no herd fed
+// more than it has, every field the right shape, and — the one that matters
+// most — the day can always be ended and there is always something to do.
+//
+// A failure prints the seed and the exact call that broke it, so it can be
+// replayed. The generator is deterministic for a given seed.
+import { readFileSync } from 'node:fs'
+import * as rules from '../src/core/rules.js'
+
+const data = JSON.parse(readFileSync(new URL('../public/data/game.json', import.meta.url), 'utf8'))
+const R = data.rules
+
+let pass = 0
+const failures = []
+const ok = (name, cond, detail = '') => {
+  if (cond) { pass++; console.log(`  ok    ${name}`); return true }
+  failures.push(`${name}${detail ? ` — ${detail}` : ''}`)
+  console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ''}`)
+  return false
+}
+
+/** A small deterministic generator, so a failing run can be replayed exactly. */
+const makeRng = (seed) => {
+  let s = seed >>> 0
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 4294967296
+  }
+}
+
+/**
+ * Everything that must be true of a farm, at every moment, forever.
+ *
+ * Returns the first thing that is not, as a sentence, or null.
+ */
+function wrong(state) {
+  const num = (v) => typeof v === 'number' && Number.isFinite(v)
+  const counter = (v) => Number.isSafeInteger(v) && v >= 0
+
+  for (const key of ['day', 'money', 'energy', 'xp', 'earned', 'debt', 'seasonEarned', 'bestSeason']) {
+    if (!num(state[key])) return `${key} is ${state[key]}`
+  }
+  if (state.day < 1) return `the calendar went back to day ${state.day}`
+  if (state.energy < 0) return `energy went to ${state.energy}`
+  if (state.debt < 0) return `debt went to ${state.debt}`
+  if (state.xp < 0) return `xp went to ${state.xp}`
+
+  const bags = { seeds: state.seeds, 'barn.crops': state.barn.crops, 'barn.goods': state.barn.goods, supplies: state.supplies, animals: state.animals, fed: state.fed }
+  for (const [name, bag] of Object.entries(bags)) {
+    for (const [id, n] of Object.entries(bag ?? {})) {
+      if (!counter(n)) return `${name}.${id} is ${n}`
+    }
+  }
+  for (const [id, n] of Object.entries(state.animals ?? {})) {
+    if ((state.fed[id] ?? 0) > n) return `${id}: ${state.fed[id]} fed of ${n} owned`
+  }
+  if (state.energy > rules.farmLimits(state, data).energy) {
+    return `energy ${state.energy} above the farm's limit of ${rules.farmLimits(state, data).energy}`
+  }
+  if (state.plots.length < R.plots) return `only ${state.plots.length} fields`
+  for (const [i, plot] of state.plots.entries()) {
+    if (plot.tiles.length < R.tilesPerPlot) return `field ${i} has ${plot.tiles.length} tiles`
+    if (plot.cropId != null && !rules.cropById(data, plot.cropId)) return `field ${i} grows "${plot.cropId}", which does not exist`
+    for (const t of plot.tiles) {
+      if (!counter(t.stage) || !counter(t.age) || !counter(t.picked)) return `field ${i} has a tile at stage ${t.stage}, age ${t.age}, picked ${t.picked}`
+    }
+    // A field holding a crop with nothing in it can be neither sown nor cleared.
+    if (plot.cropId != null && plot.tiles.every(t => t.stage === R.stage.empty)) {
+      return `field ${i} is held by "${plot.cropId}" with every tile bare`
+    }
+  }
+  for (const job of state.pending ?? []) {
+    if (!rules.byId(data.recipes, job.id)) return `a batch of "${job.id}" is curing, and there is no such recipe`
+    if (!Number.isSafeInteger(job.daysLeft)) return `a batch has ${job.daysLeft} days left`
+  }
+  for (const o of state.market?.orders ?? []) {
+    if (!rules.cropById(data, o.cropId)) return `the market wants "${o.cropId}", which does not exist`
+    if (o.filled > o.quota) return `an order is filled ${o.filled} of ${o.quota}`
+  }
+  return null
+}
+
+/** Everything the farm could legally be asked to do right now. */
+function moves(state) {
+  const out = []
+  const level = rules.levelOf ? rules.levelOf(state, data) : null
+  for (const c of data.crops) {
+    out.push(['buySeed', () => rules.buySeed(state, data, c.id)])
+    out.push(['sellCrop', () => rules.sellCrop(state, data, c.id, 1 + Math.floor(Math.random() * 3))])
+    for (let p = 0; p < state.plots.length; p++) out.push([`plant ${c.id}`, () => rules.plant(state, data, p, c.id)])
+  }
+  for (const g of data.goods) out.push(['sellGood', () => rules.sellGood(state, data, g.id, 2)])
+  for (const s of data.supplies) out.push(['buySupply', () => rules.buySupply(state, data, s.id)])
+  for (const a of data.animals) {
+    out.push(['buyAnimal', () => rules.buyAnimal(state, data, a.id)])
+    out.push(['feed', () => rules.feedAnimals(state, data, a.id)])
+  }
+  for (const r of data.recipes) out.push([`craft ${r.id}`, () => rules.craft(state, data, r.id)])
+  for (let p = 0; p < state.plots.length; p++) {
+    out.push([`waterPlot ${p}`, () => rules.waterPlot(state, data, p)])
+    out.push([`harvestPlot ${p}`, () => rules.harvestPlot(state, data, p)])
+    out.push([`clearPlot ${p}`, () => rules.clearPlot(state, data, p)])
+    for (const tool of data.tools) {
+      for (let t = 0; t < R.tilesPerPlot; t++) {
+        out.push([`${tool.id} ${p}:${t}`, () => rules.applyTool(state, data, p, t, tool.id)])
+      }
+    }
+  }
+  out.push(['travel', () => rules.travel(state, data)])
+  void level
+  return out
+}
+
+const SEEDS = Number(process.env.FUZZ_SEEDS || 12)
+const DAYS = Number(process.env.FUZZ_DAYS || 400)
+const PER_DAY = Number(process.env.FUZZ_MOVES || 25)
+
+console.log(`\nfuzz: ${SEEDS} farms, ${DAYS} days each, ${PER_DAY} things tried a day\n`)
+
+let broke = null
+let deepest = 0
+let stuck = null
+for (let seed = 1; seed <= SEEDS && !broke; seed++) {
+  const rng = makeRng(seed * 7919)
+  const state = rules.newGame(data)
+  const pick = (list) => list[Math.floor(rng() * list.length)]
+
+  for (let day = 0; day < DAYS && !broke; day++) {
+    const legal = moves(state)
+    for (let i = 0; i < PER_DAY; i++) {
+      const [what, run] = pick(legal)
+      try { run() } catch (err) {
+        broke = `seed ${seed}, day ${day}: ${what} threw ${err.message}`
+        break
+      }
+      const bad = wrong(state)
+      if (bad) { broke = `seed ${seed}, day ${day}, after ${what}: ${bad}`; break }
+    }
+    if (broke) break
+
+    // The promise the game makes about never being over. A day in which nothing
+    // would change is deliberately refused — an empty day is not a day — so the
+    // question is not whether the day can be ended right now, but whether the
+    // player has anything left they could do about it.
+    //
+    // Asked on a copy. The first version of this asked by running every legal
+    // move on the farm itself, which both destroyed the evidence and answered
+    // the wrong question: a farm is not stuck because somebody spent its last
+    // coins on pesticide. What a cornered player actually does is clear the
+    // dead ground, sell what is in the barn, and put the cheapest seed they can
+    // afford into the ground — so that is what is tried, in that order.
+    if (!rules.willAdvanceSimulation(state, data)) {
+      const escape = structuredClone(state)
+      for (let p = 0; p < escape.plots.length; p++) rules.clearPlot(escape, data, p)
+      // A count, not a null: `countOf` reads anything that is not a whole
+      // number as nothing at all, so asking to sell `null` sold nothing and made
+      // this look like a farm with a barn it could not empty.
+      for (const [id, n] of Object.entries(escape.barn.crops)) if (n > 0) rules.sellCrop(escape, data, id, n)
+      for (const [id, n] of Object.entries(escape.barn.goods)) if (n > 0) rules.sellGood(escape, data, id, n)
+      const affordable = data.crops
+        .filter(c => (c.unlockLevel ?? 1) <= rules.levelOf(escape, data))
+        .sort((a, b) => a.seedPrice - b.seedPrice)
+      for (const c of affordable) {
+        if (rules.willAdvanceSimulation(escape, data)) break
+        if (!(escape.seeds[c.id] > 0) && !rules.buySeed(escape, data, c.id)) continue
+        for (let p = 0; p < escape.plots.length; p++) if (rules.plant(escape, data, p, c.id)) break
+      }
+      if (!rules.willAdvanceSimulation(escape, data)) {
+        stuck = `seed ${seed}, day ${day}: a cornered player has nothing left to try`
+        if (process.env.FUZZ_DUMP) {
+          const show = (f) => JSON.stringify({
+            money: f.money, energy: f.energy, debt: f.debt, day: f.day, level: rules.levelOf(f, data),
+            seeds: f.seeds, supplies: f.supplies, animals: f.animals, fed: f.fed,
+            barnCrops: f.barn.crops, barnGoods: f.barn.goods, pending: f.pending,
+            plots: f.plots.map(p => ({ crop: p.cropId, stages: p.tiles.map(t => t.stage).join(',') })),
+            needsRescue: rules.needsRescue(f, data),
+          }, null, 1)
+          console.log(`\n  the farm as it stood:\n${show(state)}`)
+          console.log(`\n  and after clearing, selling and sowing whatever it could:\n${show(escape)}`)
+          const why = (f) => {
+            const avail = data.crops.filter(c => (c.unlockLevel ?? 1) <= rules.levelOf(f, data))
+            const cheapest = Math.min(...avail.map(c => c.seedPrice))
+            return {
+              cheapest, canAfford: f.money >= cheapest,
+              holdsSeeds: Object.values(f.seeds).some(n => n > 0),
+              fieldHoldsACrop: f.plots.some(p => p.cropId),
+              stock: Object.entries(f.barn.crops).filter(([, n]) => n > 0),
+              goods: Object.entries(f.barn.goods).filter(([, n]) => n > 0),
+            }
+          }
+          console.log(`\n  why no rescue, as it stood: ${JSON.stringify(why(state))}`)
+          console.log(`  why no rescue, after trying:  ${JSON.stringify(why(escape))}`)
+        }
+        break
+      }
+    }
+
+    try { rules.endDay(state, data, rng) } catch (err) {
+      broke = `seed ${seed}, day ${day}: the night threw ${err.message}`
+      break
+    }
+    const bad = wrong(state)
+    if (bad) { broke = `seed ${seed}, day ${day}, after the night: ${bad}`; break }
+    deepest = Math.max(deepest, state.day)
+  }
+}
+
+ok('a farm played at random stays a farm it is possible to describe', broke === null, broke ?? '')
+ok('and never reaches a day it cannot end', stuck === null, stuck ?? '')
+ok('and was played a long way in', deepest > 300, `${deepest} days deep`)
+
+console.log(`\n${pass} passed, ${failures.length} failed\n`)
+if (failures.length) { failures.forEach(f => console.error(`  ${f}`)); process.exit(1) }

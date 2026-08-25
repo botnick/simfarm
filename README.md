@@ -44,17 +44,18 @@ server logs what it dropped.
 
 ## Checking a change
 
-    npm test             # 411  the rules
+    npm test             # 412  the rules
     npm run e2e          # 221  the game in a browser, offline
     npm run online       #  64  the game in a browser, against a real server
     npm run test:server  # 166  the server refusing what it should
     npm run facade       #  57  what the browser does with every answer a server can give
-    npm run reach        #  35  every crop, animal, recipe and reward is reachable,
+    npm run reach        #  43  every crop, animal, recipe and reward is reachable,
                          #      and both languages say everything
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run durable      #   9  two processes over one ledger, across a restart
     npm run pace         #   9  how long before each thing becomes available
+    npm run fuzz         #   3  a farm played at random for years, still a farm
     npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs
@@ -92,6 +93,14 @@ place by finding something:
   and three lines that were not orphans at all, but things the rules worked out
   every night and the farm screen never read, including crops rotting in an
   overfull barn.
+
+- **`fuzz`** plays at random, far further in than a person would, and after
+  every single call asks whether the farm is still something the game can
+  describe: no NaN, nothing negative that counts things, energy inside the
+  farm's own limit, no herd fed more than it has, and — the one that matters —
+  that a cornered player always has something left to try. Eighty farms, twelve
+  hundred days each. Every bug worth finding here so far has been one of those
+  two shapes, found by hand, one at a time, by playing far enough in.
 
 The rule book also has to hang together with itself. What an animal eats and
 produces, what a recipe takes and makes, what a tool consumes, which seed the

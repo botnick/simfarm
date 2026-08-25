@@ -234,13 +234,15 @@ const fresh = (level = null) => {
   ok('and every field is a whole field', small.plots.every(p => p.tiles.length === R.tilesPerPlot))
   ok('and the night runs over all of them', (() => { try { endDay(small, data); return true } catch { return false } })())
 
-  // Land the player already has is never taken away, whatever the rule book now
-  // says: a farm that shrinks is a field somebody paid for and lost.
+  // A field beyond the ones the game can show is not a bonus. There are four
+  // field screens, four sets of art and four ways in from the farm; a fifth
+  // field would be advanced every night, ripen and rot, and never be reachable.
+  // Better gone than secretly farmed.
   const big = fresh()
-  const extra = structuredClone(big.plots[0])
-  big.plots.push(extra)
-  reconcile(big, data)
-  eq('a farm with more land than the rule book gives out keeps it', big.plots.length, R.plots + 1)
+  big.plots.push(structuredClone(big.plots[0]))
+  const hidden = reconcile(big, data)
+  eq('a field the game could never show is not kept', big.plots.length, R.plots)
+  eq('and it is reported rather than vanishing quietly', hidden.hiddenPlots, 1)
 
   // Energy is one day's worth and the rule book decides how much that is.
   const rested = fresh()

@@ -224,6 +224,7 @@ eq('an edited board is replaced by the server\'s', reread, (await serverState())
   // has to say so before the sale, not after it.
   await ask('/test/grant', { crops: { [id]: 20 } })
   await reload()
+  const floodedBefore = (await serverState()).market.sold[id] ?? 0
   const second = await findButton(/^\$ [\d,]+$/)
   ok('the board prices the second load too', !!second, JSON.stringify(await texts()))
   const quotedSecond = Number(second.text.replace(/\D/g, ''))
@@ -233,7 +234,14 @@ eq('an edited board is replaced by the server\'s', reread, (await serverState())
   await click(second.x, second.y, 900)
   eq('and the server pays that lower price to the coin',
     await farm('s.money') - beforeSecond, quotedSecond)
-  eq('the server counted the flood', (await serverState()).market.sold[id] >= 40, true)
+  // Units that fill an open order are bought at a premium rather than dumped on
+  // the market, so they deliberately do not count as flooding it. Only what is
+  // left over does — which is why this measures the change rather than the
+  // total, and why an earlier version of it passed on some weeks and not others
+  // depending on whether that crop happened to be on the board.
+  const floodedAfter = (await serverState()).market.sold[id] ?? 0
+  ok('the server counted what the market could not absorb',
+    floodedAfter > floodedBefore, `${floodedBefore} -> ${floodedAfter}`)
   await page.screenshot({ path: 'shots/online/4-saturation.png' })
 }
 

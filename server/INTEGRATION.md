@@ -264,7 +264,7 @@ for exists, and that every line that exists is reachable from the code.
 ## Checking a change did not break it
 
     cd game
-    npm test             # 411  the rules
+    npm test             # 412  the rules
     npm run e2e          # 221  the game in a browser, offline
     npm run online       #  64  the game in a browser, against a real server
     npm run facade       #  57  what the browser does with every answer a server can give

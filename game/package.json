@@ -26,7 +26,8 @@
     "deployed": "node tools/deployed.mjs",
     "deployed:mobile": "node tools/deployed-mobile.mjs",
     "pace": "node tools/pace.mjs",
-    "fatal": "node tools/fatal.mjs"
+    "fatal": "node tools/fatal.mjs",
+    "fuzz": "node tools/fuzz.mjs"
   },
   "keywords": [],
   "author": "",

@@ -173,7 +173,15 @@ export default class FarmScene extends Phaser.Scene {
         next.animalMax && t('farm.grantAnimals', next.animalMax),
       ].filter(Boolean).join(' · '))] : []),
       t('farm.seedsInBag', Object.values(s.seeds).reduce((x, y) => x + y, 0)),
-      `${tx(this.data_.supplies[0].name)} ${s.supplies.fertilizer} · ${tx(this.data_.supplies[1].name)} ${s.supplies.pesticide}`,
+      // By id, not by position. This line used to take its two names from the
+      // first and second entries in the supplies list while taking the numbers
+      // beside them from `fertilizer` and `pesticide` — so reordering that list
+      // would have gone on printing two plausible names against two counts that
+      // no longer belonged to them, and nothing would have looked wrong.
+      this.data_.supplies
+        .filter(x => !this.data_.animals.some(a => a.feed === x.id))
+        .map(x => `${tx(x.name)} ${s.supplies[x.id] ?? 0}`)
+        .join(' · '),
       feeds,
       t('farm.herdLine', kept, capacity, produce),
       `${t('farm.stored', totalCrops(s))} · ${curing ? t('farm.curing', curing) : t('farm.nothingCuring')}`,

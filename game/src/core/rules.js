@@ -16,6 +16,20 @@ import { levelFor, unlockedCropIds } from './progression.js'
  * are therefore clamped here, at the boundary, rather than in any one caller.
  */
 const MAX_COUNT = 10000
+
+/**
+ * The shape of a farm this build can actually show.
+ *
+ * The number of fields and the tiles in one are read from the rule book
+ * everywhere in the rules, which makes them look adjustable, and they are not:
+ * there are four field screens, four sets of art, four ways in from the farm,
+ * and twelve tile positions marked out on each. A rule book asking for a fifth
+ * field would be obeyed by every rule and shown by nothing — land the night
+ * keeps advancing that the player cannot reach. So the number lives here, is
+ * checked against the rule book by `checkData`, and is checked against the
+ * screens themselves by the suite.
+ */
+export const BUILT_FOR = { plots: 4, tilesPerPlot: 12 }
 export function countOf(value, limit = MAX_COUNT) {
   const n = typeof value === 'number' ? value : NaN
   if (!Number.isSafeInteger(n) || n < 1) return 0
@@ -330,7 +344,7 @@ export function plant(state, data, plotIndex, cropId) {
  */
 export function reconcile(state, data) {
   const r = data.rules
-  const dropped = { crops: [], animals: [], goods: [], supplies: [], recipes: [], plots: 0, orders: 0 }
+  const dropped = { crops: [], animals: [], goods: [], supplies: [], recipes: [], plots: 0, orders: 0, hiddenPlots: 0 }
   const known = (list, id) => byId(list, id) != null
   // A counter that survived an edit is still only trustworthy as a number. NaN
   // spreads through every sum it touches and prints as "NaN" on the wallet.
@@ -403,6 +417,13 @@ export function reconcile(state, data) {
   state.plots ??= []
   const bare = () => ({ cropId: null, tiles: Array.from({ length: r.tilesPerPlot }, () => ({ ...emptyTile(), stage: r.stage.empty })) })
   while (state.plots.length < r.plots) state.plots.push(bare())
+  // And no more than that. A field beyond the ones the game can show is not a
+  // bonus: the night goes on advancing it, crops in it ripen and rot, and the
+  // player has no way to reach any of it. Better gone than secretly farmed.
+  if (state.plots.length > r.plots) {
+    dropped.hiddenPlots = state.plots.length - r.plots
+    state.plots.length = r.plots
+  }
   for (const plot of state.plots) {
     plot.tiles ??= []
     while (plot.tiles.length < r.tilesPerPlot) plot.tiles.push({ ...emptyTile(), stage: r.stage.empty })
@@ -887,9 +908,51 @@ export function checkData(data) {
   // The farm's shape has to be a shape. A rule book with no fields, no tiles or
   // no crops is not a harder game, it is one nobody can play.
   const r = data.rules ?? {}
-  if (!(r.plots > 0)) problems.push('the rule book gives out no fields')
-  if (!(r.tilesPerPlot > 0)) problems.push('a field in this rule book has no tiles')
+  if (r.plots !== BUILT_FOR.plots) {
+    problems.push(`the rule book gives out ${r.plots} fields, and this build has screens for ${BUILT_FOR.plots}`)
+  }
+  if (r.tilesPerPlot !== BUILT_FOR.tilesPerPlot) {
+    problems.push(`a field here holds ${r.tilesPerPlot} tiles, and this build has places to draw ${BUILT_FOR.tilesPerPlot}`)
+  }
   if (!(data.crops ?? []).length) problems.push('there is nothing to grow')
+
+  // Ids are how everything here refers to everything else, so two things
+  // sharing one means every reference to it is a coin toss, and a blank one
+  // cannot be referred to at all.
+  for (const list of ['crops', 'goods', 'supplies', 'animals', 'tools', 'recipes', 'milestones']) {
+    const seen = new Set()
+    for (const item of data[list] ?? []) {
+      const id = item?.id
+      if (typeof id !== 'string' || !id.trim()) { problems.push(`something in ${list} has no id`); continue }
+      if (seen.has(id)) problems.push(`${list} has two things called "${id}"`)
+      seen.add(id)
+    }
+  }
+
+  // Everything the player is shown has to have something to show. A missing
+  // name reaches the screen as "undefined" in whichever language they chose.
+  for (const list of ['crops', 'goods', 'supplies', 'animals', 'tools', 'recipes']) {
+    for (const item of data[list] ?? []) {
+      for (const lang of ['en', 'th']) {
+        if (!String(item?.name?.[lang] ?? '').trim()) {
+          problems.push(`${list.replace(/s$/, '')} "${item?.id}" has no ${lang} name`)
+        }
+      }
+    }
+  }
+  for (const c of data.crops ?? []) if (!c.art) problems.push(`crop "${c.id}" has no art`)
+  for (const a of data.animals ?? []) if (!a.art && !a.image) problems.push(`animal "${a.id}" has nothing to draw`)
+
+  // The field screen is built around these five and nothing else: the tool
+  // switch, the whole-field buttons, the toolbar art and the number keys all
+  // name them. A rule book without one of them leaves a gap nothing fills.
+  for (const id of ['harvest', 'water', 'fertilize', 'spray', 'clear']) {
+    if (!has('tools', id)) problems.push(`there is no "${id}" tool, and the field screen is built around one`)
+  }
+
+  for (const key of ['title', 'shopName']) {
+    if (!String(data.meta?.[key] ?? '').trim()) problems.push(`the game has no ${key}`)
+  }
   // Something has to be plantable on the first day, or a new farm is stuck the
   // moment it starts.
   if ((data.crops ?? []).length && !(data.crops ?? []).some(c => (c.unlockLevel ?? 1) <= 1)) {

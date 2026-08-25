@@ -12,6 +12,7 @@ const data = JSON.parse(readFileSync(new URL('../public/data/game.json', import.
 
 let pass = 0
 const failures = []
+const eq = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
 const ok = (name, cond, detail = '') => {
   if (cond) { pass++; console.log(`  ok    ${name}`); return true }
   failures.push(`${name}${detail ? ` — ${detail}` : ''}`)
@@ -253,6 +254,39 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok('a feed that names nothing is caught', found.some(p => p.includes('no-such-supply')), found.join(' | '))
   ok('a recipe that makes nothing is caught', found.some(p => p.includes('makes nothing')), found.join(' | '))
   ok('and a rescue loan for a crop that was removed', found.some(p => p.includes('no-such-crop')), found.join(' | '))
+
+  // The number of fields is written down in three places that must agree: the
+  // rule book, the constant the rules check it against, and the screens
+  // themselves. Generalising the UI without moving the constant would leave the
+  // check refusing a rule book the game could now perfectly well show; moving
+  // the constant without the UI would let one through that it cannot.
+  const plotScene = readFileSync(new URL('../src/scenes/PlotScene.js', import.meta.url), 'utf8')
+  const frames = plotScene.match(/const FRAME_OF_PLOT = \[([^\]]*)\]/)?.[1].split(',').length
+  const scenes = plotScene.match(/const SCENE_OF_PLOT = \[([^\]]*)\]/)?.[1].split(',').length
+  eq('there is a field screen for every field the game gives out', frames, rules.BUILT_FOR.plots)
+  eq('and a backdrop for each of them', scenes, rules.BUILT_FOR.plots)
+  eq('and the rule book asks for exactly that many', data.rules.plots, rules.BUILT_FOR.plots)
+  eq('and a field holds the number of tiles the screens mark out',
+    data.rules.tilesPerPlot, rules.BUILT_FOR.tilesPerPlot)
+
+  const oversized = structuredClone(data)
+  oversized.rules.plots = rules.BUILT_FOR.plots + 1
+  ok('a rule book asking for a field the game cannot show is caught',
+    rules.checkData(oversized).some(p => p.includes('screens for')))
+
+  const twins = structuredClone(data)
+  twins.crops.push({ ...twins.crops[0] })
+  ok('and two crops sharing one id', rules.checkData(twins).some(p => p.includes('two things called')))
+
+  const nameless = structuredClone(data)
+  delete nameless.animals[0].name.th
+  ok('and something with no name in one of the two languages',
+    rules.checkData(nameless).some(p => p.includes('no th name')))
+
+  const toolless = structuredClone(data)
+  toolless.tools = toolless.tools.filter(t => t.id !== 'clear')
+  ok('and a rule book with no way to clear withered ground',
+    rules.checkData(toolless).some(p => p.includes('"clear" tool')))
 
   const empty = structuredClone(data)
   empty.crops = []
