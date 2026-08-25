@@ -23,6 +23,39 @@ import { t } from './i18n.js'
 const PLAIN = 'Something went wrong. Reloading usually fixes it.'
 const PLAIN_RELOAD = 'Reload'
 
+/**
+ * The boundary this build is using, for game code that is not a scene.
+ *
+ * Lifecycle methods are wrapped by name, but a button's handler is an anonymous
+ * function handed to a widget, and a throw inside an async one becomes an
+ * unhandled rejection: the browser logs it and the player sees a button that
+ * did nothing at all. Silence is the worst answer a game can give, and it is
+ * the exact fault this whole boundary was built after.
+ *
+ * A module-level hook rather than a global listener, deliberately. Only code
+ * that reaches for it is covered, so the game never ends up apologising for a
+ * fault in the page that embedded it.
+ */
+let active = null
+export const useBoundary = (boundary) => { active = boundary }
+
+/** Run one of our handlers and own what it throws, sync or not. */
+export function owned(fn, phase) {
+  if (typeof fn !== 'function') return fn
+  return function handled(...args) {
+    try {
+      const out = fn.apply(this, args)
+      if (out && typeof out.then === 'function') {
+        return out.then(undefined, (err) => { active?.report(err, phase); throw err })
+      }
+      return out
+    } catch (err) {
+      active?.report(err, phase)
+      throw err
+    }
+  }
+}
+
 export function createBoundary({ onFatal = null, fatalUI = true, document: doc = globalThis.document } = {}) {
   let done = false
   let notice = null

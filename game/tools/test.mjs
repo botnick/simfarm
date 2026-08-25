@@ -795,6 +795,33 @@ const fresh = (level = null) => {
   eq('and only the remainder is kept', kept, Math.max(0, gross - owed))
   eq('which is what lands in the purse', s.money, moneyBefore + kept)
 
+  // Every coin a sale is worth goes somewhere, and to exactly one place: into
+  // the player's hand or against the loan. Money appearing out of the gap
+  // between those two, or falling into it, is the kind of arithmetic mistake
+  // that no single example would catch — so this asks it of every debt, every
+  // crop and every quantity that fits in a barn.
+  {
+    let mismatched = 0, wrongReturn = 0, checked = 0
+    for (let k = 0; k < 400; k++) {
+      const f = fresh()
+      f.debt = k % 7 === 0 ? 0 : (k * 37) % 900
+      const id = data.crops[k % 3].id
+      const n = 1 + (k % 9)
+      f.barn.crops[id] = n
+      const quoted = rules.quoteCrop(f, data, id, n).total
+      const money0 = f.money, debt0 = f.debt
+      const returned = sellCrop(f, data, id, n)
+      const gained = f.money - money0
+      const repaid = debt0 - f.debt
+      checked++
+      if (gained + repaid !== quoted) mismatched++
+      if (returned !== gained) wrongReturn++
+    }
+    eq('every coin a sale is worth is either handed over or repaid', mismatched, 0)
+    eq('and a sale reports what the player actually got', wrongReturn, 0)
+    ok('with enough cases to mean something', checked === 400)
+  }
+
   // Emptying the barn on purpose to claim another seed just adds more debt.
   const farmer = fresh(1)
   farmer.money = 0

@@ -10,7 +10,7 @@ import WorkshopScene from './scenes/WorkshopScene.js'
 import EndScene from './scenes/EndScene.js'
 import { setStrings } from './core/i18n.js'
 import { installViewport } from './core/viewport.js'
-import { createBoundary } from './core/fatal.js'
+import { createBoundary, useBoundary } from './core/fatal.js'
 import { createFarm } from './core/farm.js'
 import { createServerClient } from './core/server-client.js'
 import { WIDTH, HEIGHT, RENDER_SCALE } from './core/size.js'
@@ -44,6 +44,7 @@ const fatal = createBoundary({
   onFatal: globalThis.SIMFARM?.onFatal ?? null,
   fatalUI: globalThis.SIMFARM?.fatalUI !== false,
 })
+useBoundary(fatal)
 window.__simfarmFatal = fatal
 
 // These decide what art loads and what the UI says, so they must be in hand

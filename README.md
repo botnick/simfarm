@@ -45,7 +45,7 @@ server logs what it dropped.
 ## Checking a change
 
     npm test             # 412  the rules
-    npm run e2e          # 221  the game in a browser, offline
+    npm run e2e          # 227  the game in a browser, offline
     npm run online       #  67  the game in a browser, against a real server
     npm run test:server  # 166  the server refusing what it should
     npm run facade       #  57  what the browser does with every answer a server can give

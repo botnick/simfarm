@@ -57,6 +57,11 @@ export function newGame(data, { name = '' } = {}) {
     day: r.startDay,
     money: r.startMoney,
     energy: r.startEnergy,
+    // A day may only be ended if something was done in it. A farm on its very
+    // first morning has done nothing yet and must still be allowed to sleep, so
+    // it starts having "worked" — the same thing the server does when it opens
+    // a session. Kept on the farm so it survives a save.
+    workedSinceEndDay: true,
     raining: false,
     seeds: {},                                        // cropId -> count
     supplies: Object.fromEntries(data.supplies.map(s => [s.id, 0])),
@@ -438,6 +443,11 @@ export function reconcile(state, data) {
     plot.cropId = null
     plot.tiles = plot.tiles.map(() => ({ ...emptyTile(), stage: r.stage.empty }))
   }
+
+  // A save written before the day gate existed carries no marker. The server
+  // gives a resumed session the benefit of the doubt for the same reason, so
+  // the two go on agreeing about which days may be ended.
+  if (typeof state.workedSinceEndDay !== 'boolean') state.workedSinceEndDay = true
 
   // Energy is one day's worth and the rule book decides how much that is, so a
   // save carrying more than the farm can now hold is simply a full day. The

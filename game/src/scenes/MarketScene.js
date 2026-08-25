@@ -11,6 +11,7 @@ import { setBackdrop } from '../ui/backdrop.js'
 import { t, tx } from '../core/i18n.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx } from '../core/audio.js'
+import { outcome, saidAs, takings } from '../ui/sale.js'
 
 const PER_PAGE = 6      // two columns of three
 
@@ -59,12 +60,13 @@ export default class MarketScene extends Phaser.Scene {
   /** Sell as much of a crop as the barn holds, and say what it fetched. */
   async sell(cropId, count, at) {
     if (!count) return
-    const before = this.state.money
+    const before = takings(this.state)
     await this.farm.sellCrop({ cropId, count })
-    const paid = this.state.money - before
-    if (paid > 0) {
-      toast(this, at.x, at.y, `+$${money(paid)}`, '#f5b301')
-      coins(this, at.x, at.y + 8, 7, { to: this.hud.walletAt })
+    const result = outcome(before, takings(this.state))
+    const said = saidAs(result)
+    if (said) {
+      toast(this, at.x, at.y, said, '#f5b301')
+      if (result.kept > 0) coins(this, at.x, at.y + 8, 7, { to: this.hud.walletAt })
       sfx(this, 'money-received')
     }
     this.render()

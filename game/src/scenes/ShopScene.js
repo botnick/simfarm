@@ -11,6 +11,7 @@ import { setBackdrop } from '../ui/backdrop.js'
 import { t, tx } from '../core/i18n.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx } from '../core/audio.js'
+import { outcome, saidAs, takings } from '../ui/sale.js'
 
 const PER_PAGE = 4
 
@@ -181,14 +182,27 @@ export default class ShopScene extends Phaser.Scene {
       }
 
       const btn = button(this, WIDTH - 92, y + 27, 104, 28, `$ ${money(row.total ?? row.price)}`, async () => {
-        const before = this.state.money
+        // Not "did the money change" — with the rescue loan outstanding a sale
+        // can empty the barn, pay down the debt and leave the money exactly
+        // where it was. That read as a refusal, so the shop told the player the
+        // sale had failed while their crops went anyway.
+        const before = takings(this.state)
         await row.act()
-        const ok = this.state.money !== before
-        toast(this, WIDTH - 92, y + 4, ok ? (row.selling ? `+$${money(row.total)}` : `−$${money(row.price)}`) : t('shop.cannot'),
+        const result = outcome(before, takings(this.state))
+        const ok = row.selling ? result.happened : this.state.money !== before.money
+        const said = row.selling ? saidAs(result) : `−$${money(row.price)}`
+        // A price is short enough to sit over the button it came from. What the
+        // loan did with the money is a sentence, and a sentence pinned to the
+        // right-hand edge runs off it — so anything longer than a price is
+        // centred over the panel instead.
+        const brief = ok && said.length <= 10
+        toast(this, brief ? WIDTH - 92 : WIDTH / 2, y + 4, ok ? said : t('shop.cannot'),
           ok ? (row.selling ? '#f5b301' : '#b33939') : '#b33939')
         if (ok) {
           sfx(this, row.selling ? 'money-received' : 'buy-spend')
-          if (row.selling) coins(this, WIDTH - 92, y + 20, 7, { to: this.hud.walletAt })
+          // Coins only when coins actually arrived; the loan taking it is not
+          // money flying to the wallet.
+          if (row.selling && result.kept > 0) coins(this, WIDTH - 92, y + 20, 7, { to: this.hud.walletAt })
         } else sfx(this, 'refused')
         this.render()
       }, { tone: row.can ? 'green' : 'red', size: 11 })

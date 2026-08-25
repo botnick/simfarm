@@ -1,5 +1,6 @@
 // Helpers for working in the original 600x420 stage space.
 import { WIDTH, HEIGHT } from '../main.js'
+import { owned } from '../core/fatal.js'
 
 /** Scene backgrounds are exact 600x420 plates lifted from the SWF. */
 export function backdrop(scene, key) {
@@ -44,6 +45,8 @@ export function diamondZone(scene, r, onClick) {
     hitAreaCallback: (_area, x, y) => Math.abs(x - hw) / hw + Math.abs(y - hh) / hh <= 1,
     useHandCursor: true,
   })
-  zone.on('pointerup', onClick)
+  // The same ownership the buttons have. A hotspot is how a player reaches a
+  // field, and a field that silently ignores every click is where this started.
+  zone.on('pointerup', owned(onClick, `hotspot ${r.role ?? ''}`.trim()))
   return zone
 }

@@ -159,6 +159,10 @@ export function createFarm({ data, state, server = null, onChange = () => {}, on
   /** Offline: run the rule and hand back the farm as it now stands. */
   const local = (fn) => async (...args) => {
     const result = fn(current, data, ...args)
+    // Anything the player did counts as having worked today. The server keeps
+    // the same marker for the same reason; offline it is kept on the farm so it
+    // survives a save and a reload.
+    if (result !== false && result !== 0) current.workedSinceEndDay = true
     collectLocalMilestones()
     notify()
     await flushLocal()
@@ -318,7 +322,18 @@ export function createFarm({ data, state, server = null, onChange = () => {}, on
         } finally { inFlight-- }
         })
       }
+      // The same gate the server applies, for the same reason. A day may only be
+      // ended if something was done today or the night itself would change
+      // something. Without it an offline farm could sit and spin the calendar
+      // until a market board it liked came round, and reroll the weather for
+      // free — which the server refuses outright, so the two were playing
+      // different games.
+      if (!current.workedSinceEndDay && !rules.willAdvanceSimulation(current, data)) {
+        onRefused('nothing would change overnight')
+        return { refused: 'nothing would change overnight' }
+      }
       const report = rules.endDay(current, data, Math.random)
+      current.workedSinceEndDay = false
       collectLocalMilestones()
       notify()
       await flushLocal()

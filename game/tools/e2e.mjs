@@ -427,6 +427,42 @@ check('the market quote is not a flat multiple of the base price',
   expected !== firstCrop.sellPrice * held, `quote ${expected} vs flat ${firstCrop.sellPrice * held}`)
 await shot('07-sold')
 
+/* -------------------------------------- a sale the loan swallows whole */
+// The rescue loan is repaid off the top, so a sale worth less than the debt
+// empties the barn, pays the loan down and leaves the money exactly where it
+// was. The shop decided whether a sale had worked by watching the money, so it
+// showed the refusal toast and played the refusal sound — telling the player
+// the sale had failed while their crops went anyway.
+{
+  await poke(`
+    s.barn.crops['${firstCrop.id}'] = 2
+    s.debt = 100000
+    s.energy = 100
+  `)
+  // Already in the shop on the SELL tab, and pressing the tab you are already
+  // on does not redraw anything — so go away and come back.
+  await click(126, 94, 400)                                   // SEEDS
+  await click(514, 94, 600)                                   // and back to SELL
+  const heldBefore = await read(`s.barn.crops['${firstCrop.id}'] || 0`)
+  const moneyBefore = await read('s.money')
+  const debtBefore = await read('s.debt')
+  // Caught early: the toast rises as it fades, so a late look finds it half
+  // gone and sitting over the tab bar.
+  await click(1032 * W / 1200, 289 * H / 840, 260)
+  const told = await texts()
+  await shot('07b-loan-took-it')
+  eq('the crops really did leave the barn', await read(`s.barn.crops['${firstCrop.id}'] || 0`), 0)
+  eq('and the money did not move, because the loan took it', await read('s.money'), moneyBefore)
+  check('the loan shrank by what the sale was worth',
+    await read('s.debt') < debtBefore, `${debtBefore} -> ${await read('s.debt')}`)
+  check('the shop does not call a sale that worked a failure',
+    !told.some(x => /can't|cannot|ไม่ได้|ทำไม่ได้/i.test(x)), JSON.stringify(told))
+  check('and says where the money went instead',
+    told.some(x => /the loan took|หนี้หักไป/i.test(x)), JSON.stringify(told))
+  check('the barn is emptier than it was', heldBefore > 0)
+  await poke('s.debt = 0')
+}
+
 /* ----------------------------------------------------------- the market */
 // The board is where the two rules that drive the endless economy are visible:
 // weekly orders and saturation. Both are invisible everywhere else, so a

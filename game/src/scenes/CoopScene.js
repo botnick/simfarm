@@ -10,6 +10,7 @@ import { setBackdrop } from '../ui/backdrop.js'
 import { t, tx } from '../core/i18n.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx } from '../core/audio.js'
+import { outcome, saidAs, takings } from '../ui/sale.js'
 
 /**
  * The yard. It once held only chickens; now every animal in the data file gets
@@ -85,15 +86,16 @@ export default class CoopScene extends Phaser.Scene {
 
   /** Sell everything the animals have produced. */
   async sellAll() {
-    const before = this.state.money
+    const before = takings(this.state)
     for (const a of this.data_.animals) {
       const held = goodCount(this.state, a.produces)
       if (held) await this.farm.sellGood({ goodId: a.produces, count: held })
     }
-    const total = this.state.money - before
-    if (total) {
-      toast(this, WIDTH / 2, HEIGHT - 60, `+$${money(total)}`, '#f5b301')
-      coins(this, WIDTH / 2, HEIGHT - 52, 10, { to: this.hud.walletAt })
+    const result = outcome(before, takings(this.state))
+    const said = saidAs(result)
+    if (said) {
+      toast(this, WIDTH / 2, HEIGHT - 60, said, '#f5b301')
+      if (result.kept > 0) coins(this, WIDTH / 2, HEIGHT - 52, 10, { to: this.hud.walletAt })
       sfx(this, 'money-received')
     }
     this.render()

@@ -1,8 +1,9 @@
 // The game's look. The scene plates are chunky, saturated, black-outlined
 // cartoon art, so everything drawn on top of them is built to match: glossy
 // panels with a heavy rim, pressed buttons, and the original's own display face.
-import { RENDER_SCALE } from '../core/size.js'
+import { RENDER_SCALE, WIDTH } from '../core/size.js'
 import { sfx } from '../core/audio.js'
+import { owned } from '../core/fatal.js'
 
 export const C = {
   // Pulled off the original artwork so new chrome sits in the same palette.
@@ -140,7 +141,9 @@ export function button(scene, x, y, w, h, text, onClick, { tone = 'green', size 
     if (!api.enabled) { sfx(scene, 'refused', { volume: 0.5 }); return }
     draw(true, 0)
     sfx(scene, 'button-press')
-    onClick()
+    // Owned, because a handler that throws used to leave the player with a
+    // button that simply did nothing and no way to know why.
+    owned(onClick, `button "${typeof text === 'string' ? text : '?'}"`)()
   })
 
   const drawOff = () => {
@@ -207,6 +210,19 @@ export function chip(scene, anchorX, y, { tone = 'blue', size = 11, align = 'lef
 export function toast(scene, x, y, text, color = '#ffffff') {
   const t = label(scene, x, y, text, { size: 15, color, origin: [0.5, 0.5], display: true })
   t.setStroke('#1a1208', 5).setDepth(9000)
-  scene.tweens.add({ targets: t, y: y - 34, alpha: 0, duration: 1000, ease: 'Cubic.easeOut', onComplete: () => t.destroy() })
+  // Toasts are placed against the thing they are about — the row that was sold,
+  // the button that was pressed — which is fine for "+$40" and wrong the moment
+  // the message is a sentence. "the loan took $104" hung off the right edge of
+  // the screen with the amount cut off, and Thai says most things longer still.
+  // So the message stays where it was asked for when it fits, and moves only as
+  // far as it must to be readable.
+  const MARGIN = 6
+  const half = t.displayWidth / 2
+  if (half * 2 + MARGIN * 2 >= WIDTH) t.setX(WIDTH / 2)
+  else t.setX(Math.min(Math.max(x, half + MARGIN), WIDTH - half - MARGIN))
+  // It floats up as it fades, so it also needs room above it to do that in.
+  const top = Math.max(y, 40)
+  t.setY(top)
+  scene.tweens.add({ targets: t, y: top - 34, alpha: 0, duration: 1000, ease: 'Cubic.easeOut', onComplete: () => t.destroy() })
   return t
 }
