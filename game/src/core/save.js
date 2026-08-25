@@ -44,7 +44,13 @@ export function saveSealed(envelope) {
   const held = read()?.sealed?.save
   // Only compare within one farm: a different farm is a different slot's worth
   // of history, and its revisions mean nothing here.
-  if (held && held.farmId === incoming.farmId && held.revision >= incoming.revision) return false
+  //
+  // Nothing to write is not a failure. Resuming a farm and pressing SAVE before
+  // touching anything asks the slot to hold an envelope it already holds, and
+  // answering "false" to that put a red save-failed toast in front of a player
+  // whose farm was, in fact, saved. The question is whether the slot holds this
+  // farm at least this far on — and it does.
+  if (held && held.farmId === incoming.farmId && held.revision >= incoming.revision) return true
 
   localStorage.setItem(KEY, JSON.stringify({ v: 2, savedAt: Date.now(), sealed: envelope }))
   return true

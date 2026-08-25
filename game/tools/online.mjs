@@ -124,6 +124,43 @@ eq('the day advanced', await farm('s.day'), dayBefore + 1)
 eq('and the server is on the same day', (await serverState()).day, await farm('s.day'))
 await page.screenshot({ path: 'shots/online/1-farm.png' })
 
+/* --------------------------------- an impatient player, before there is a farm */
+// Opening a farm is a network round trip, and NEW GAME is one tap away from
+// being two. Both taps asked the server for a session, both got one, and the
+// game went to whichever answer came back last — leaving a farm alive that
+// nobody was playing. Counted from the server's side, because the browser can
+// only ever show one of them.
+{
+  const fresh = await browser.newPage()
+  await fresh.setViewport({ width: 1200, height: 840 })
+  await fresh.evaluateOnNewDocument((url) => {
+    localStorage.setItem('simfarm.server', url)
+    // Count the asks at the source. The server deliberately tells a stranger
+    // nothing about how many farms it is holding, and this is the question
+    // anyway: did the browser ask twice?
+    window.__opened = 0
+    const real = window.fetch
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input?.url ?? ''
+      if (url.endsWith('/session')) window.__opened++
+      return real(input, init)
+    }
+  }, SERVER)
+  await fresh.goto(process.env.URL || 'http://localhost:5180/', { waitUntil: 'domcontentloaded', timeout: 60000 })
+  await new Promise(r => setTimeout(r, 2400))
+  const fbox = await fresh.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+  const spot = [fbox.x + fbox.w * (208 / W), fbox.y + fbox.h * (284 / H)]
+  await fresh.mouse.click(...spot)
+  await fresh.mouse.click(...spot)                            // no waiting in between
+  await new Promise(r => setTimeout(r, 2000))
+  const where = await fresh.evaluate(() => window.__game.scene.scenes.filter(x => x.scene.isActive()).map(x => x.scene.key).join('+'))
+  eq('a double tap still opens the farm', where, 'Farm')
+  eq('and asks the server for one farm, not two', await fresh.evaluate(() => window.__opened), 1)
+  const holding = await fresh.evaluate(() => !!window.__serverSession)
+  ok('and the browser is holding a session', holding)
+  await fresh.close()
+}
+
 /* ------------------------------------------ an impatient player, over a network */
 // Two presses before the first answer arrives. Both carry the revision the
 // browser believed at the time, so the second is stale and the server refuses

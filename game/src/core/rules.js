@@ -50,7 +50,7 @@ export const pestOf = (crop, rules) => ({ ...rules.pest, ...(crop.pest || {}) })
 
 const emptyTile = () => ({ stage: 0, age: 0, watered: 0, fertilized: 0, pest: 0, picked: 0 })
 
-export function newGame(data, { name = '' } = {}) {
+export function newGame(data, { name = '', rng = Math.random } = {}) {
   const r = data.rules
   const state = {
     name,
@@ -80,7 +80,11 @@ export function newGame(data, { name = '' } = {}) {
       tiles: Array.from({ length: r.tilesPerPlot }, () => ({ ...emptyTile(), stage: r.stage.empty })),
     })),
   }
-  state.market = newMarket(data, unlockedCropIds(data, 1), state.day)
+  // The opening board is a roll like any other, so it takes a generator like
+  // any other. It defaulted to the global one, which meant a farm could not be
+  // reproduced from its seed even in principle — and a fuzzer that cannot
+  // replay the run it just failed on is not much of a fuzzer.
+  state.market = newMarket(data, unlockedCropIds(data, 1), state.day, rng)
   return state
 }
 

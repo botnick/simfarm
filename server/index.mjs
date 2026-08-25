@@ -132,8 +132,21 @@ const HOST_KEY = process.env.SIMFARM_HOST_KEY || null
 // give somebody a fresh budget — which is what they would have had anyway.
 const HITS_MAX = 20_000
 const hits = new Map()
+
+/**
+ * A clock that only ever goes forwards.
+ *
+ * The wall clock does not: NTP corrections, a host waking from sleep and a
+ * daylight-saving change can all put it back. A rate window measured on it then
+ * has a start in the future, every comparison says the window is still open,
+ * and the caller stays rate-limited until real time catches up — which could be
+ * hours. Nothing here needs to survive a restart, so nothing here needs the
+ * wall clock.
+ */
+const monotonic = () => performance.now()
+
 function rateLimited(key, rate = RATE) {
-  const now = Date.now()
+  const now = monotonic()
   const entry = hits.get(key)
   if (entry && now - entry.start <= rate.windowMs) {
     entry.count++
@@ -278,8 +291,14 @@ const server = createServer(async (req, res) => {
         if (body.save.schemaVersion !== SCHEMA_VERSION) return json(res, 409, { error: 'save is from another version' })
         // A save older than the ledger is prepared to remember cannot be checked
         // for replay any more, so it is refused rather than trusted.
+        // A save from the future never expires: age comes out negative and
+        // every comparison against the limit passes. Only this server stamps
+        // that field, so a long way ahead means a clock that was wrong when it
+        // signed, and the save should be treated as unreadable rather than
+        // immortal. A few minutes of drift is ordinary and allowed.
+        const CLOCK_SLACK_MS = 5 * 60 * 1000
         const age = Date.now() - Number(body.save.issuedAt ?? 0)
-        if (!Number.isFinite(age) || age > SAVE_TTL_MS) {
+        if (!Number.isFinite(age) || age > SAVE_TTL_MS || age < -CLOCK_SLACK_MS) {
           return json(res, 409, { error: 'save has expired' })
         }
         // A signature proves the save was ours; it does not prove it is the
@@ -293,7 +312,12 @@ const server = createServer(async (req, res) => {
           rngCounter: body.save.rngCounter,
           revision: body.save.revision,
           // Signed, therefore trustworthy, therefore restored rather than reset.
-          lastEndDay: body.save.lastEndDay,
+          // Trustworthy is not the same as sensible, though: this is a wall
+          // clock reading from another moment and possibly another machine, and
+          // it can come back describing the future. A farm whose last night is
+          // stamped ahead of now would refuse every day until real time caught
+          // up, so time it cannot have waited yet is time it has not waited.
+          lastEndDay: Math.min(Number(body.save.lastEndDay) || 0, Date.now()),
           workedSinceEndDay: body.save.workedSinceEndDay,
           outbox: body.save.outbox,
         }
@@ -387,6 +411,9 @@ const server = createServer(async (req, res) => {
 
       if (body.type === 'endDay') {
         const now = Date.now()
+        // Resuming already clamps this; the clock can also move while a session
+        // is open, and the same reasoning applies to that.
+        if (session.lastEndDay > now) session.lastEndDay = now
         if (now - session.lastEndDay < END_DAY_COOLDOWN_MS) {
           return json(res, 429, { error: 'too soon' })
         }

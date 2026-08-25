@@ -266,9 +266,9 @@ for exists, and that every line that exists is reachable from the code.
     cd game
     npm test             # 412  the rules
     npm run e2e          # 227  the game in a browser, offline
-    npm run online       #  67  the game in a browser, against a real server
-    npm run facade       #  57  what the browser does with every answer a server can give
-    npm run test:server  # 166  the server refusing what it should
+    npm run online       #  70  the game in a browser, against a real server
+    npm run facade       #  59  what the browser does with every answer a server can give
+    npm run test:server  # 173  the server refusing what it should
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run reach        #  29  every crop, animal, recipe and reward is reachable

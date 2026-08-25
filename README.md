@@ -46,16 +46,16 @@ server logs what it dropped.
 
     npm test             # 412  the rules
     npm run e2e          # 227  the game in a browser, offline
-    npm run online       #  67  the game in a browser, against a real server
-    npm run test:server  # 166  the server refusing what it should
-    npm run facade       #  57  what the browser does with every answer a server can give
+    npm run online       #  70  the game in a browser, against a real server
+    npm run test:server  # 173  the server refusing what it should
+    npm run facade       #  59  what the browser does with every answer a server can give
     npm run reach        #  43  every crop, animal, recipe and reward is reachable,
                          #      and both languages say everything
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run durable      #   9  two processes over one ledger, across a restart
     npm run pace         #   9  how long before each thing becomes available
-    npm run fuzz         #   3  a farm played at random for years, still a farm
+    npm run fuzz         #   5  a farm played at random for years, still a farm
     npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs

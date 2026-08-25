@@ -306,8 +306,16 @@ console.log('\nfarm facade\n')
   eq('the first envelope is kept', saveSealed(envelope(1)), true)
   eq('a newer one replaces it', saveSealed(envelope(2)), true)
   eq('and the slot holds the newer one', loadSealed().save.revision, 2)
-  eq('a late answer describing an older farm is refused', saveSealed(envelope(1)), false)
-  eq('and the slot still holds the newer one', loadSealed().save.revision, 2)
+  // A late answer describing an older farm must not overwrite the newer one.
+  // It is still not a failure to report: the slot holds this farm further on
+  // than the answer describes, so the farm is saved — and saying otherwise put
+  // a red save-failed toast in front of a player who resumed a farm and pressed
+  // SAVE before touching anything, which asks the slot to hold what it already
+  // holds. What matters is what the slot ends up with, not whether a write ran.
+  eq('a late answer describing an older farm still counts as saved', saveSealed(envelope(1)), true)
+  eq('but the slot keeps the newer one', loadSealed().save.revision, 2)
+  eq('and the same revision twice is saved, not failed', saveSealed(envelope(2)), true)
+  eq('with the slot unchanged', loadSealed().save.revision, 2)
   eq('a different farm is a different history', saveSealed(envelope(1, 'farm-b')), true)
   eq('and takes the slot', loadSealed().save.farmId, 'farm-b')
   eq('an envelope with no revision is not a save', saveSealed({ save: { farmId: 'x' }, signature: 's' }), false)

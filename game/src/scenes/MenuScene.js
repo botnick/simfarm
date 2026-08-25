@@ -55,7 +55,7 @@ export default class MenuScene extends Phaser.Scene {
         : t('menu.summaryEndless', data.crops.length, data.recipes.length, data.rules.plots),
       { size: 11, color: C.ink })
 
-    button(this, WIDTH / 2 - 92, 284, 170, 34, t('menu.newGame'), () => this.begin(newGame(data, { name: this.farmName })), { size: 14 })
+    const newBtn = button(this, WIDTH / 2 - 92, 284, 170, 34, t('menu.newGame'), () => this.begin(newGame(data, { name: this.farmName })), { size: 14 })
     const loadBtn = button(this, WIDTH / 2 + 92, 284, 170, 34, t('menu.loadGame'), () => {
       // A sealed save belongs to the server and is handed back untouched; a
       // plain one is a farm this browser can play by itself.
@@ -86,7 +86,13 @@ export default class MenuScene extends Phaser.Scene {
     // silently started a new game. Offline it is the other way round: there is
     // nobody to open a sealed envelope.
     const online = !!this.registry.get('serverUrl')
-    loadBtn.setEnabled(hasSave() && (online ? !!loadSealed() : !!load()))
+    const canLoad = hasSave() && (online ? !!loadSealed() : !!load())
+    loadBtn.setEnabled(canLoad)
+
+    // Locked together while a farm is being opened, and each put back the way it
+    // was rather than simply switched on — LOAD is not always meant to be.
+    this.lockButtons = () => { newBtn.setEnabled(false); loadBtn.setEnabled(false) }
+    this.unlockButtons = () => { newBtn.setEnabled(true); loadBtn.setEnabled(canLoad) }
 
     // Language toggle: the menu has no HUD to carry it.
     button(this, 44, 26, 60, 24, t('lang.name'), () => { setLang(nextLang()); this.scene.restart() }, { tone: 'wood', size: 11 })
@@ -114,6 +120,15 @@ export default class MenuScene extends Phaser.Scene {
    * ever mirrors it; without one the same rules run here.
    */
   async begin(state, sealed = null) {
+    // One farm at a time. Opening one is a network round trip, and both buttons
+    // are one tap away from being two: a double tap asked the server for two
+    // sessions, left both alive, and handed the game to whichever answer came
+    // back last. Resuming the same sealed save twice was worse — the second
+    // session evicts the first, and the browser could be left holding the one
+    // that was evicted.
+    if (this.starting) return
+    this.starting = true
+    this.lockButtons?.()
     const data = this.registry.get('data')
 
     // A farm starts with none of the previous farm's history. These live on the
@@ -136,6 +151,14 @@ export default class MenuScene extends Phaser.Scene {
       if (this.scene.isActive()) toast(this, WIDTH / 2, 200, t(REFUSALS[reason] ?? 'refused.other'), '#ffd6d6')
     }
 
+    // Every way out of here that is not a farm has to give the buttons back, or
+    // a player who was refused once is left looking at a menu they cannot use.
+    const giveUp = (reason) => {
+      this.starting = false
+      if (this.scene.isActive()) this.unlockButtons?.()
+      onRefused(reason)
+    }
+
     if (server) {
       // Connecting can fail, and it used to fail into the worst possible shape:
       // an unhandled rejection left the player looking at the menu with no
@@ -150,11 +173,11 @@ export default class MenuScene extends Phaser.Scene {
           ? await server.start({ save: sealed.save, signature: sealed.signature })
           : await server.start({ name: state?.name })
       } catch {
-        onRefused('offline')
+        giveUp('offline')
         return
       }
       if (!started?.session || !started?.state) {
-        onRefused(started?.error ?? 'offline')
+        giveUp(started?.error ?? 'offline')
         return
       }
       // Both sides load their own copy of the rule book — the server to decide
@@ -163,7 +186,7 @@ export default class MenuScene extends Phaser.Scene {
       // simply show prices and unlock levels it does not agree with, which is a
       // worse thing to hand a player than an error.
       if (started.dataVersion && started.dataVersion !== fingerprint(data)) {
-        onRefused('ruleMismatch')
+        giveUp('ruleMismatch')
         return
       }
       state = started.state
@@ -178,7 +201,7 @@ export default class MenuScene extends Phaser.Scene {
       // Offline there is nobody to open a sealed save, so it is not offered:
       // LOAD GAME is only enabled when the slot holds something this browser
       // can actually play.
-      if (!state) { onRefused('offline'); return }
+      if (!state) { giveUp('offline'); return }
       this.registry.set('farm', createFarm({ data, state, onMilestones: (m) => this.registry.set('milestones', m) }))
     }
     // Kept for anything still reading the raw state directly.

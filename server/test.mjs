@@ -877,6 +877,79 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   rmSync(dir, { recursive: true, force: true })
 }
 
+/* ------------------------------------------- a clock that went backwards */
+{
+  // The wall clock is not monotonic — NTP corrects it, a host wakes from sleep,
+  // daylight saving moves it — and two things here read it across a gap: a save
+  // carries the moment it was issued, and a session carries when its last night
+  // was. Both can legitimately come back describing a moment in the future, and
+  // both used to fail open in the same direction: a save from the future never
+  // expired, because its age came out negative and every comparison against the
+  // limit passed; a farm whose last night was stamped ahead of now refused every
+  // day until real time caught up.
+  const { createHmac } = await import('node:crypto')
+  const long = 'clocks'.padEnd(48, '-')
+  const seal = (save) => createHmac('sha256', long).update(JSON.stringify(save)).digest('hex')
+
+  const child2 = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_ENDDAY_MS: '60', SIMFARM_STRICT: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const url = await new Promise((resolve, reject) => {
+    let out = ''
+    const watch = (d) => {
+      out += d
+      const m = out.match(/farm server on \S*?(\d+)/)
+      if (m) resolve(`http://127.0.0.1:${m[1]}`)
+    }
+    child2.stdout.on('data', watch)
+    child2.stderr.on('data', watch)
+    setTimeout(() => reject(new Error(`clock server did not start: ${out.slice(0, 300)}`)), 8000)
+  })
+  const send = (path, body, session) => fetch(url + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(session ? { 'x-session': session } : {}) },
+    body: JSON.stringify(body ?? {}),
+    signal: AbortSignal.timeout(5000),
+  }).then(async r => ({ status: r.status, body: await r.json() }))
+
+  const opened = await send('/session', {})
+  const C = opened.body.session
+  await send('/intent', { type: 'buySeed', cropId: DATA.crops[0].id }, C)
+  const saved = await send('/save', {}, C)
+  ok('a save to work from', saved.status === 200 && !!saved.body.save)
+
+  // Signed by us with the server's own secret, so nothing here is testing the
+  // signature — only what the server makes of the times inside it.
+  const forged = (changes) => {
+    const save = { ...structuredClone(saved.body.save), ...changes }
+    return { save, signature: seal(save) }
+  }
+  const honest = forged({})
+  eq('a save we signed ourselves is accepted, so the forgery works',
+    (await send('/session', honest)).status, 200)
+
+  const fromTheFuture = forged({ issuedAt: Date.now() + 48 * 60 * 60 * 1000 })
+  const refused = await send('/session', fromTheFuture)
+  eq('a save stamped two days from now is refused rather than immortal', refused.status, 409)
+  eq('and says the save cannot be read', refused.body.error, 'save has expired')
+
+  const slightlyAhead = forged({ issuedAt: Date.now() + 30 * 1000 })
+  eq('while ordinary clock drift is still fine', (await send('/session', slightlyAhead)).status, 200)
+
+  // A farm whose last night is stamped an hour from now. Waiting out the real
+  // cooldown must be enough; waiting out an hour of imaginary time is not.
+  const nightInTheFuture = forged({ lastEndDay: Date.now() + 60 * 60 * 1000 })
+  const resumed = await send('/session', nightInTheFuture)
+  eq('a farm whose last night is in the future still opens', resumed.status, 200)
+  await new Promise(r => setTimeout(r, 140))
+  const night = await send('/intent', { type: 'endDay' }, resumed.body.session)
+  eq('and can end a day once the real cooldown has passed',
+    { status: night.status, error: night.body.error ?? null }, { status: 200, error: null })
+
+  child2.kill()
+}
+
 /* --------------------------------- a rule book that does not hang together */
 {
   // Every id in the rule book that points at another id is a reference nothing

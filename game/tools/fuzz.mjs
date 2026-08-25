@@ -80,12 +80,27 @@ function wrong(state) {
   if (state.energy > rules.farmLimits(state, data).energy) {
     return `energy ${state.energy} above the farm's limit of ${rules.farmLimits(state, data).energy}`
   }
-  if (state.plots.length < R.plots) return `only ${state.plots.length} fields`
+  if (state.plots.length !== R.plots) return `the farm has ${state.plots.length} fields`
+  if (typeof state.raining !== 'boolean') return `the weather is ${state.raining}`
+  if (!counter(state.market?.week)) return `the market is on week ${state.market?.week}`
   for (const [i, plot] of state.plots.entries()) {
     if (plot.tiles.length < R.tilesPerPlot) return `field ${i} has ${plot.tiles.length} tiles`
     if (plot.cropId != null && !rules.cropById(data, plot.cropId)) return `field ${i} grows "${plot.cropId}", which does not exist`
+    if (plot.tiles.length !== R.tilesPerPlot) return `field ${i} has ${plot.tiles.length} tiles`
     for (const t of plot.tiles) {
       if (!counter(t.stage) || !counter(t.age) || !counter(t.picked)) return `field ${i} has a tile at stage ${t.stage}, age ${t.age}, picked ${t.picked}`
+      // Every flag on a tile is a count too, and NaN in any of them spreads the
+      // same way as it does anywhere else.
+      if (!counter(t.watered) || !counter(t.fertilized) || !counter(t.pest)) {
+        return `field ${i} has a tile watered ${t.watered}, fertilized ${t.fertilized}, pest ${t.pest}`
+      }
+      if (t.stage > R.stage.empty) return `field ${i} has a tile at stage ${t.stage}, past the end of the list`
+    }
+    // A field with nothing growing in it must not still be claimed by a crop,
+    // and a field claimed by nothing must not have anything alive in it — the
+    // second leaves orphan plants occupying land nobody can sow.
+    if (plot.cropId == null && plot.tiles.some(t => t.stage > 0 && t.stage < R.stage.empty)) {
+      return `field ${i} belongs to nobody and has something growing in it`
     }
     // A field holding a crop with nothing in it can be neither sown nor cleared.
     if (plot.cropId != null && plot.tiles.every(t => t.stage === R.stage.empty)) {
@@ -108,12 +123,15 @@ function wrong(state) {
 }
 
 /** Everything the farm could legally be asked to do right now. */
-function moves(state) {
+function moves(state, rng) {
   const out = []
   const level = rules.levelOf ? rules.levelOf(state, data) : null
   for (const c of data.crops) {
     out.push(['buySeed', () => rules.buySeed(state, data, c.id)])
-    out.push(['sellCrop', () => rules.sellCrop(state, data, c.id, 1 + Math.floor(Math.random() * 3))])
+    // The run's own generator, not the global one. This printed a seed it could
+    // not actually replay: a failing run said "seed 12" and seed 12 then took a
+    // different path, which is the one thing a fuzzer must never do.
+    out.push(['sellCrop', () => rules.sellCrop(state, data, c.id, 1 + Math.floor(rng() * 3))])
     for (let p = 0; p < state.plots.length; p++) out.push([`plant ${c.id}`, () => rules.plant(state, data, p, c.id)])
   }
   for (const g of data.goods) out.push(['sellGood', () => rules.sellGood(state, data, g.id, 2)])
@@ -149,11 +167,31 @@ let deepest = 0
 let stuck = null
 for (let seed = 1; seed <= SEEDS && !broke; seed++) {
   const rng = makeRng(seed * 7919)
-  const state = rules.newGame(data)
+  const state = rules.newGame(data, { rng })
+  // Every third farm starts as one that has been through a rule-book change and
+  // been put back together. Playing only from `newGame` can never reach the
+  // states `reconcile` produces, and those are where the last two rounds of
+  // bugs actually lived.
+  if (seed % 3 === 0) {
+    delete state.animals[data.animals[0].id]
+    delete state.supplies[data.supplies[0].id]
+    state.seeds['crop-that-was-removed'] = 4
+    state.barn.crops['crop-that-was-removed'] = 3
+    state.plots[0].cropId = 'crop-that-was-removed'
+    state.plots[0].tiles.forEach(t => { t.stage = R.stage.seed })
+    state.plots[1].cropId = data.crops[0].id
+    state.plots[1].tiles.forEach(t => { t.stage = R.stage.empty })
+    state.pending.push({ id: 'recipe-that-was-removed', daysLeft: 3 })
+    state.energy = 99999
+    state.fed[data.animals[1].id] = 40
+    rules.reconcile(state, data)
+    const bad = wrong(state)
+    if (bad) { broke = `seed ${seed}: a farm put back together is not a farm — ${bad}`; break }
+  }
   const pick = (list) => list[Math.floor(rng() * list.length)]
 
   for (let day = 0; day < DAYS && !broke; day++) {
-    const legal = moves(state)
+    const legal = moves(state, rng)
     for (let i = 0; i < PER_DAY; i++) {
       const [what, run] = pick(legal)
       try { run() } catch (err) {
@@ -238,6 +276,24 @@ for (let seed = 1; seed <= SEEDS && !broke; seed++) {
     deepest = Math.max(deepest, state.day)
   }
 }
+
+// A fuzzer that prints a seed it cannot replay is worse than no fuzzer: it
+// reports a failure and then cannot show it to you again. This one used to
+// reach for the global generator when deciding how much to sell.
+const replay = (seed, days) => {
+  const rng = makeRng(seed * 7919)
+  const state = rules.newGame(data, { rng })
+  const pick = (list) => list[Math.floor(rng() * list.length)]
+  for (let day = 0; day < days; day++) {
+    const legal = moves(state, rng)
+    for (let i = 0; i < 15; i++) { const [, run] = pick(legal); try { run() } catch { /* not a move */ } }
+    if (!rules.willAdvanceSimulation(state, data)) break
+    rules.endDay(state, data, rng)
+  }
+  return JSON.stringify(state)
+}
+ok('the same seed plays the same game twice', replay(5, 30) === replay(5, 30))
+ok('and a different seed plays a different one', replay(5, 30) !== replay(6, 30))
 
 ok('a farm played at random stays a farm it is possible to describe', broke === null, broke ?? '')
 ok('and never reaches a day it cannot end', stuck === null, stuck ?? '')
