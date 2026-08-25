@@ -81,7 +81,13 @@ export default class ShopScene extends Phaser.Scene {
         name: tx(c.name), price: c.seedPrice, icon: { crop: c }, locked,
         desc: locked ? t('shop.lockedHint', c.unlockLevel) : tx(c.desc),
         owned: s.seeds[c.id] || 0, ownedLabel: t('shop.inBag'),
-        facts: t('shop.seedFacts', c.daysPerStage, c.harvests, money(c.sellPrice)),
+        // Anything worth knowing that the numbers do not say. Chilli draws twice
+        // the pests of anything else and pumpkin almost none, and the rule book
+        // has carried the words for both, in both languages, since they were
+        // written — read by nothing, so the player bought a chilli field and
+        // found out the hard way.
+        facts: [t('shop.seedFacts', c.daysPerStage, c.harvests, money(c.sellPrice)),
+          ...(c.tags ?? []).map(tag => tx(tag))].join('  ·  '),
         badge: locked ? t('shop.locked', c.unlockLevel) : null,
         act: () => this.farm.buySeed({ cropId: c.id }), can: !locked && s.money >= c.seedPrice,
       }

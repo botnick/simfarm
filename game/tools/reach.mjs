@@ -305,6 +305,29 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok('and a number written as a word',
     rules.checkData(wordy).some(p => p.includes('not a number')))
 
+  // Sound is a set of keyed protocols, and a typo in one goes unheard rather
+  // than unhandled: a cue for a tool that does not exist is simply never
+  // played. `toolCue.hoe` sat in the rule book long after the tool was renamed
+  // to `clear`, doing nothing, and nothing said so.
+  const strayCue = structuredClone(data)
+  strayCue.audio.toolCue.plough = 'tool-hoe'
+  ok('a sound for a tool that does not exist is caught',
+    rules.checkData(strayCue).some(p => p.includes('no such tool')))
+  const silentCue = structuredClone(data)
+  silentCue.audio.toolCue.clear = 'tool-nonesuch'
+  ok('and a cue naming a sound that is not there',
+    rules.checkData(silentCue).some(p => p.includes('not one of the sounds')))
+
+  // A recipe ingredient is one of three things and an output one of two.
+  const vague = structuredClone(data)
+  vague.recipes[0].inputs[0] = { amount: 2 }
+  ok('an ingredient that names nothing is caught',
+    rules.checkData(vague).some(p => p.includes('naming nothing')))
+  const both = structuredClone(data)
+  both.recipes[0].output = { supply: 'fertilizer', good: 'jam', amount: 1 }
+  ok('and a recipe that makes two things at once',
+    rules.checkData(both).some(p => p.includes('makes supply and good')))
+
   const empty = structuredClone(data)
   empty.crops = []
   ok('a rule book with nothing to grow is caught', rules.checkData(empty).some(p => p.includes('nothing to grow')))
@@ -323,68 +346,111 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   // wrong answer: a rule book reported as having no levels while the farm went
   // on growing every four of them. Nothing failed, because nothing was looking.
   //
-  // The first version of this read the source and looked for `progression.x`,
-  // and passed with the bug put back — because the code writes
-  // `const prog = data.progression` and then `prog.grants`, which a search for
-  // the word never sees. Reading source cannot survive a rename. Watching the
-  // object can: a proxy is asked for every key by name, including the ones that
-  // are not there, which is exactly the case worth catching.
-  const asked = new Map()
-  const watch = (name, held) => new Proxy(held ?? {}, {
-    get(target, key) {
-      if (typeof key === 'string') {
-        const seen = asked.get(name) ?? new Set()
-        seen.add(key)
-        asked.set(name, seen)
-      }
-      return Reflect.get(target, key)
-    },
-  })
+  // The first version scanned the source for `progression.x` and passed with
+  // the bug put back, because the code aliases the object to a local first.
+  // Reading source cannot survive a rename. The second watched the object but
+  // only at the top, so `market.ordrCount` would have gone the same way — a
+  // proxy that hands back the raw nested object stops watching at the first
+  // dot. This one follows it down and records the whole path.
+  const MACHINERY = new Set(['then', 'toJSON', 'constructor', 'valueOf', 'toString',
+    'hasOwnProperty', 'inspect', 'nodeType', 'length', 'name'])
 
-  const watched = {
-    ...data,
-    rules: watch('rules', data.rules),
-    progression: watch('progression', data.progression),
-    meta: watch('meta', data.meta),
+  /** Watch an object and everything under it, recording the path of each read. */
+  const watch = (path, held, into) => {
+    if (held === null || typeof held !== 'object' || Array.isArray(held)) return held
+    return new Proxy(held, {
+      get(target, key, receiver) {
+        // The receiver matters: a getter reading `this.x` should be watched too.
+        const value = Reflect.get(target, key, receiver)
+        if (typeof key !== 'string' || MACHINERY.has(key)) return value
+        const here = path ? `${path}.${key}` : key
+        into.add(here)
+        return watch(here, value, into)
+      },
+    })
   }
 
-  // A farm played hard enough to touch the settings: growing, feeding, curing,
-  // selling, a night, a week and a level.
-  const s = rules.newGame(watched)
-  s.money = 999999
-  rules.checkData(watched)
-  rules.has(watched)
-  rules.farmLimits(s, watched)
-  rules.nextGrant(s, watched)
-  rules.buySeed(s, watched, data.crops[0].id)
-  rules.plant(s, watched, 0, data.crops[0].id)
-  for (const supply of data.supplies) rules.buySupply(s, watched, supply.id)
-  for (const animal of data.animals) { rules.buyAnimal(s, watched, animal.id); rules.feedAnimals(s, watched, animal.id) }
-  for (const recipe of data.recipes) rules.craft(s, watched, recipe.id)
-  for (let day = 0; day < 40; day++) {
-    rules.waterPlot(s, watched, 0)
-    rules.harvestPlot(s, watched, 0)
-    rules.clearPlot(s, watched, 0)
-    rules.endDay(s, watched, () => 0.5)
+  /** Play a farm hard enough to touch everything, and say what it asked for. */
+  const readsOf = (also) => {
+    const asked = new Set()
+    const one = (name, held) => watch(name, held, asked)
+    const each = (name, list) => (list ?? []).map(item => watch(name, item, asked))
+    const w = {
+      ...data,
+      rules: one('rules', data.rules),
+      progression: one('progression', data.progression),
+      meta: one('meta', data.meta),
+      crops: each('crop', data.crops),
+      animals: each('animal', data.animals),
+      recipes: each('recipe', data.recipes),
+      tools: each('tool', data.tools),
+      supplies: each('supply', data.supplies),
+      goods: each('good', data.goods),
+    }
+    const s = rules.newGame(w)
+    s.money = 999999
+    also?.(w, s)
+    rules.has(w)
+    rules.farmLimits(s, w)
+    rules.nextGrant(s, w)
+    rules.buySeed(s, w, data.crops[0].id)
+    rules.plant(s, w, 0, data.crops[0].id)
+    for (const supply of data.supplies) rules.buySupply(s, w, supply.id)
+    for (const animal of data.animals) { rules.buyAnimal(s, w, animal.id); rules.feedAnimals(s, w, animal.id) }
+    for (const recipe of data.recipes) rules.craft(s, w, recipe.id)
+    for (let day = 0; day < 40; day++) {
+      rules.waterPlot(s, w, 0)
+      rules.harvestPlot(s, w, 0)
+      rules.clearPlot(s, w, 0)
+      rules.endDay(s, w, () => 0.5)
+    }
+    rules.sellCrop(s, w, data.crops[0].id, 1)
+    rules.willAdvanceSimulation(s, w)
+    rules.reconcile(s, w)
+    return asked
   }
-  rules.sellCrop(s, watched, data.crops[0].id, 1)
-  rules.willAdvanceSimulation(s, watched)
-  rules.reconcile(s, watched)
 
-  for (const [name, keys] of asked) {
-    const held = data[name] ?? {}
-    const missing = [...keys].filter(k => !(k in held))
-    ok(`every ${name} setting the code asks for is one the rule book has`,
-      missing.length === 0, missing.length ? `asked for ${missing.join(', ')}` : '')
+  // Two runs, kept apart. `checkData` reads a great deal of the rule book in
+  // order to check it, so counting its reads as consumers would make a field
+  // read by nothing but its own validator look like a field somebody uses.
+  const played = readsOf(null)
+  const checked = readsOf((w) => rules.checkData(w))
+
+  /** Does the rule book actually have a path like `rules.market.orderCount`? */
+  const holds = (root, path) => {
+    let here = root
+    for (const step of path.split('.')) {
+      if (here === null || typeof here !== 'object' || !(step in here)) return false
+      here = here[step]
+    }
+    return true
+  }
+  const LISTS = { crop: 'crops', animal: 'animals', recipe: 'recipes', tool: 'tools', supply: 'supplies', good: 'goods' }
+
+  const groups = new Map()
+  for (const path of checked) {
+    const name = path.split('.')[0]
+    const rest = path.slice(name.length + 1)
+    if (!rest && LISTS[name]) continue
+    ;(groups.get(name) ?? groups.set(name, []).get(name)).push(rest || path)
+  }
+  for (const [name, paths] of groups) {
+    const missing = paths.filter(rest => (LISTS[name]
+      // Crops differ from each other on purpose, so one of them having it is
+      // enough — only `harvests` is on every single crop.
+      ? !(data[LISTS[name]] ?? []).some(item => holds(item, rest))
+      : !holds(data[name] ?? {}, rest)))
+    ok(`every ${name} the code asks for is one the rule book has`,
+      missing.length === 0, missing.length ? `asked for ${[...new Set(missing)].join(', ')}` : '')
   }
 
-  // And the reverse for the one that caught us: a setting the rule book carries
-  // that nothing ever asks for is either dead weight, or a read spelled
-  // differently somewhere.
-  const touchedProgression = asked.get('progression') ?? new Set()
+  // The other direction, for the flat settings only. The lists cannot be judged
+  // this way: `desc`, `art` and `image` are read by screens and the loader,
+  // neither of which runs here, so they would read as dead when they are not.
+  const readsProgression = [...played].filter(p => p.startsWith('progression.')).map(p => p.slice('progression.'.length))
   const unread = Object.keys(data.progression ?? {})
-    .filter(k => !k.startsWith('_') && !touchedProgression.has(k))
-  ok('and every progression setting the rule book has is asked for',
+    .filter(k => !k.startsWith('_') && !readsProgression.includes(k))
+  ok('and every progression setting the rule book has is asked for while playing',
     unread.length === 0, unread.length ? `nothing asks for ${unread.join(', ')}` : '')
 }
 

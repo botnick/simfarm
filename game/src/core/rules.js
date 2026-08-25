@@ -1126,6 +1126,46 @@ export function checkData(data) {
   }
   if (!chance(r.barn?.spoilRate)) problems.push('the spoil rate is not a share of the surplus')
 
+  // Sound is a set of keyed protocols, and every one of them is a place a typo
+  // goes unheard rather than unhandled. A tool cue for a tool that does not
+  // exist is simply never played; a cue naming a sound that is not loaded is
+  // silence where a sound should be; and music for a place nobody visits is a
+  // file downloaded for nothing. `toolCue.hoe` sat here long after the tool was
+  // renamed to `clear`, doing nothing, and nothing said so.
+  const audio = data.audio ?? {}
+  const sounds = new Set(audio.sfx ?? [])
+  for (const [toolId, cue] of Object.entries(audio.toolCue ?? {})) {
+    if (!has('tools', toolId)) problems.push(`there is a sound for using "${toolId}", and no such tool`)
+    if (!sounds.has(cue)) problems.push(`using "${toolId}" plays "${cue}", which is not one of the sounds`)
+  }
+  // Music is loaded alongside the effects rather than listed among them, so the
+  // only thing to check here is that a place names something at all — whether
+  // the file is there is a question about the folder, and `reach` asks it.
+  for (const [place, name] of Object.entries(audio.music ?? {})) {
+    if (typeof name !== 'string' || !name.trim()) problems.push(`the music for ${place} names nothing`)
+  }
+  for (const [key, value] of Object.entries(audio.volume ?? {})) {
+    if (!(Number.isFinite(value) && value >= 0 && value <= 1)) {
+      problems.push(`the ${key} volume is ${value}, which is not a level between silent and full`)
+    }
+  }
+
+  // A recipe input is one of three things and an output one of two, and saying
+  // two of them or none of them is a recipe that quietly takes or makes the
+  // wrong thing rather than one that fails.
+  for (const r of data.recipes ?? []) {
+    for (const i of r.inputs ?? []) {
+      const named = ['crop', 'good', 'anyCrop'].filter(k => i?.[k] != null)
+      if (named.length !== 1) {
+        problems.push(`recipe "${r.id}" has an ingredient naming ${named.length === 0 ? 'nothing' : named.join(' and ')}`)
+      }
+    }
+    const makes = ['supply', 'good'].filter(k => r.output?.[k] != null)
+    if (makes.length !== 1) {
+      problems.push(`recipe "${r.id}" makes ${makes.length === 0 ? 'nothing' : makes.join(' and ')}`)
+    }
+  }
+
   // How a farm grows. Reached on every level-up and every screen that says what
   // the next one brings, and never checked until now.
   const prog = data.progression ?? {}

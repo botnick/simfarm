@@ -1004,7 +1004,6 @@
       "village": "ambient-village-shop"
     },
     "toolCue": {
-      "hoe": "tool-hoe",
       "water": "tool-water",
       "fertilize": "tool-fertilise",
       "spray": "tool-pesticide",
