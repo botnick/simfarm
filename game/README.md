@@ -11,16 +11,17 @@ rather than guessed at.
 npm install
 npm run dev       # play at http://localhost:5180
 npm run server    # the authoritative game server (see below)
-npm test          # 116 rule tests (pure logic, no browser)
-npm run e2e       # 50 end-to-end assertions in a real browser
+npm test          # 433 rule tests (pure logic, no browser)
+npm run e2e       # 247 end-to-end assertions in a real browser, played offline
+npm run online    # 76 assertions against the real server, where the two can disagree
+npm run layout    # every screen, both languages: is anything off the board?
 npm run mobile    # phone/tablet, both orientations, taps really land
 npm run sim       # balance report: profit per plot per day, per crop
-npm run smoke     # screenshot walkthrough of every screen
 npm run build     # production build into dist/
 npm run fonts     # re-fetch and self-host the UI typefaces
 npm run gen-prep  # cut out generated product art and size it for the game
 npm run regions   # check every screen has the click regions it needs
-npm run test:server  # 51 adversarial tests against the game server
+npm run test:server  # 217 adversarial tests against the game server
 ```
 
 ## The server decides, the browser draws
