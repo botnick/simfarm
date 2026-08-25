@@ -139,7 +139,7 @@
     "fodder": "supply_feed"
   },
   "retired": {
-    "_why": "Replaced by drawn art under game/public/assets. The SWF ids stay here because decoding them was the hard part, but prep-assets no longer writes them: nothing in the game loads any of these, and emitting them anyway put sixteen unreferenced art files and forty-eight dead crop plates back every time the tool was run.",
+    "_why": "Replaced by drawn art under game/public/assets. The SWF ids stay here because decoding them was the hard part, but prep-assets no longer writes them: nothing in the game loads any of these, and emitting them anyway put sixteen unreferenced art files and forty-eight dead crop plates back every time the tool was run. The display font is retired for the same reason and one more: it is the original's own typeface, nothing in the game asks for it — the UI is set in Mitr and Noto Sans Thai — and it was being shipped to every player regardless. It stays in extracted/ where the rest of the SWF lives.",
     "crops": true,
     "spriteFrames": [
       "pest",
@@ -158,6 +158,9 @@
       "hud_heart",
       "hud_tools",
       "hud_daymoney"
+    ],
+    "fonts": [
+      "fat.ttf"
     ]
   }
 }

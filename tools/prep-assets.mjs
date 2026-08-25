@@ -66,7 +66,9 @@ for (const [name, frame] of Object.entries(map.scenesFromBg || {})) {
 }
 
 // The original's own display face, so the remake reads in the game's voice.
+const noFont = new Set(retired.fonts ?? [])
 for (const [name, file] of Object.entries(map.fonts || {})) {
+  if (noFont.has(name)) continue
   const src = join(EX, 'fonts', file)
   if (!existsSync(src)) { missing.push(src); continue }
   copy(`fonts/${name}`, src); n++
