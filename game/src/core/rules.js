@@ -308,6 +308,86 @@ export function plant(state, data, plotIndex, cropId) {
   return true
 }
 
+/**
+ * Bring a saved farm back into agreement with the data it is about to be played
+ * against.
+ *
+ * The README says adding a crop, an animal or a recipe is an edit to one JSON
+ * file, and it is — but a farm saved before that edit outlives it. Offline the
+ * browser hands whatever is in the slot straight to the rules, and a plot
+ * growing a crop the game no longer has is not a cosmetic problem: the night
+ * looks the crop up to age it, finds nothing, and throws. The day cannot be
+ * ended, so the throw repeats for ever and the farm is finished. Withered
+ * ground at least had twelve clicks as a way out.
+ *
+ * Everything unknown is dropped rather than guessed at. A crop that no longer
+ * exists cannot be priced, grown or sold, so pretending otherwise only moves
+ * the failure somewhere harder to read. Land is the exception worth keeping: a
+ * field growing a vanished crop is emptied, not lost.
+ *
+ * Returns what it had to drop, so a caller can say so rather than leaving the
+ * player to notice their tomatoes are gone.
+ */
+export function reconcile(state, data) {
+  const r = data.rules
+  const dropped = { crops: [], animals: [], goods: [], recipes: [], plots: 0, orders: 0 }
+  const known = (list, id) => byId(list, id) != null
+
+  const sift = (bag, list, into) => {
+    if (!bag) return
+    for (const id of Object.keys(bag)) {
+      if (known(list, id)) continue
+      if (bag[id]) into.push(id)
+      delete bag[id]
+    }
+  }
+  sift(state.seeds, data.crops, dropped.crops)
+  sift(state.barn?.crops, data.crops, dropped.crops)
+  sift(state.market?.sold, data.crops, [])
+  sift(state.barn?.goods, data.goods, dropped.goods)
+
+  // Animals come in pairs of counters and both have to go, or feeding walks a
+  // herd that is not there.
+  for (const id of Object.keys(state.animals ?? {})) {
+    if (known(data.animals, id)) continue
+    if (state.animals[id]) dropped.animals.push(id)
+    delete state.animals[id]
+    delete state.fed?.[id]
+  }
+  for (const id of Object.keys(state.fed ?? {})) if (!known(data.animals, id)) delete state.fed[id]
+
+  // A batch curing towards a recipe that no longer exists never finishes.
+  state.pending = (state.pending ?? []).filter(job => {
+    if (known(data.recipes, job.id)) return true
+    dropped.recipes.push(job.id)
+    return false
+  })
+
+  // The week's orders are reissued anyway; an order for a crop nobody can grow
+  // is only a card that can never be filled.
+  if (state.market?.orders) {
+    const before = state.market.orders.length
+    state.market.orders = state.market.orders.filter(o => known(data.crops, o.cropId))
+    dropped.orders = before - state.market.orders.length
+  }
+
+  for (const plot of state.plots ?? []) {
+    if (plot.cropId == null) continue
+    if (known(data.crops, plot.cropId)) {
+      // The other way a plot can strand: it holds a crop while every tile is
+      // already bare, so nothing can be sown and nothing can be cleared.
+      releaseIfBare(plot, r)
+      continue
+    }
+    dropped.plots++
+    plot.cropId = null
+    plot.tiles = plot.tiles.map(() => ({ ...emptyTile(), stage: r.stage.empty }))
+  }
+
+  dropped.crops = [...new Set(dropped.crops)]
+  return dropped
+}
+
 /** A plot goes back on the market once every tile has been cleared. */
 const releaseIfBare = (plot, r) => {
   if (plot.cropId && plot.tiles.every(t => t.stage === r.stage.empty)) plot.cropId = null

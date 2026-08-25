@@ -1,9 +1,9 @@
 import Phaser from 'phaser'
 import { C, art, button, fitCamera, label, panel, title, toast } from '../ui/kit.js'
 import { WIDTH, HEIGHT } from '../main.js'
-import { enter } from '../ui/fx.js'
+import { banner, enter } from '../ui/fx.js'
 import { playMusic } from '../core/audio.js'
-import { newGame } from '../core/rules.js'
+import { newGame, reconcile } from '../core/rules.js'
 import { fingerprint } from '../core/data-version.js'
 import { hasSave, load, loadSealed } from '../core/save.js'
 import { setBackdrop } from '../ui/backdrop.js'
@@ -62,7 +62,19 @@ export default class MenuScene extends Phaser.Scene {
       const sealed = loadSealed()
       if (sealed) return this.begin(null, sealed)
       const s = load()
-      if (s) this.begin(s)
+      // A farm saved before somebody edited the game's data outlives that edit,
+      // and a plot growing a crop the game no longer has takes the night down
+      // with it every time the day ends. Bring the save back into agreement
+      // with the data first, and say what that cost.
+      if (s) {
+        const lost = reconcile(s, data)
+        const gone = lost.crops.length + lost.animals.length + lost.goods.length
+          + lost.recipes.length + lost.plots + lost.orders
+        // Queued after the farm has started, because starting one clears the
+        // queue — a new farm must not inherit the last one's congratulations.
+        this.begin(s)
+        if (gone) banner(this, t('menu.saveChanged'), { tone: 'blue', sub: t('menu.saveChangedSub') })
+      }
       // Nothing openable: the button is disabled in that case, so reaching here
       // would mean the slot changed under us.
     }, { tone: 'blue', size: 14 })

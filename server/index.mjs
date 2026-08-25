@@ -16,7 +16,11 @@ import { review, enforce, positive } from './config.mjs'
 import { applyIntent, view, INTENTS } from './intents.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const DATA = JSON.parse(readFileSync(join(HERE, '../game/public/data/game.json'), 'utf8'))
+// The rule book this server enforces. SIMFARM_DATA points at a different one,
+// which is how an operator runs a build against edited data — and how the
+// suite proves a farm saved under one rule book still opens under the next.
+const DATA_FILE = process.env.SIMFARM_DATA || join(HERE, '../game/public/data/game.json')
+const DATA = JSON.parse(readFileSync(DATA_FILE, 'utf8'))
 // A fingerprint of the rule book this server enforces.
 //
 // The browser loads its own copy to draw from, and the two can drift — a host
@@ -161,6 +165,11 @@ const json = (res, code, body) => {
 // load. Measured: a well-played farm with every field in grapes is about 5 KB.
 const BODY_LIMIT = { intent: 8 * 1024, save: 256 * 1024 }
 
+// The refusals the server means to make, and therefore the only messages it
+// repeats back. Anything else that reaches the catch-all is a fault, not an
+// answer.
+const SPOKEN = new Set(['body too large', 'bad json', 'too many sessions'])
+
 const readBody = (req, limit = BODY_LIMIT.intent) => new Promise((resolve, reject) => {
   // A body that announces itself as too large is refused before a byte of it is
   // read.
@@ -280,6 +289,22 @@ const server = createServer(async (req, res) => {
         }
       } else {
         state = rules.newGame(DATA, { name: String(body.name ?? '').slice(0, 24) })
+      }
+
+      // A signature proves this save was ours. It does not prove the rule book
+      // has not been edited since — the save carries a schema version, which is
+      // the shape of the file, and nothing about which crops exist. Adding or
+      // removing one is documented as an edit to a single JSON file, and a farm
+      // growing a crop that edit removed cannot be played at all: the night
+      // looks it up to age it, finds nothing, and throws. Every attempt to end
+      // the day then fails in the same place, so the farm is finished and the
+      // player cannot even be told why.
+      //
+      // So a resumed farm is brought into agreement with the rule book this
+      // server actually enforces, before anybody is handed a session for it.
+      const dropped = rules.reconcile(state, DATA)
+      if (Object.values(dropped).some(v => (Array.isArray(v) ? v.length : v))) {
+        console.log('resumed a farm from an older rule book:', JSON.stringify(dropped))
       }
       let id, session
       try {
@@ -447,7 +472,15 @@ const server = createServer(async (req, res) => {
 
     return json(res, 404, { error: 'not found' })
   } catch (err) {
-    return json(res, 400, { error: err.message })
+    // What the server is willing to say out loud. A refusal it decided to make
+    // is useful to whoever asked; an exception it did not expect is a
+    // description of the server's insides, and handing that to a client is the
+    // same mistake the browser's fatal notice exists to avoid. This one was
+    // returning "Cannot read properties of undefined (reading 'pest')" to
+    // anyone who asked it to end a day it could not end.
+    if (SPOKEN.has(err.message)) return json(res, 400, { error: err.message })
+    console.error('unexpected:', err)
+    return json(res, 500, { error: 'the farm could not do that' })
   }
 })
 
@@ -464,4 +497,6 @@ if (ledgerProblems.length) {
   process.exit(1)
 }
 
-server.listen(PORT, () => console.log(`farm server on :${PORT}`))
+// The port that was actually bound, not the one that was asked for: PORT=0
+// means "pick one", and printing the 0 back tells nobody where the server is.
+server.listen(PORT, () => console.log(`farm server on :${server.address().port}`))

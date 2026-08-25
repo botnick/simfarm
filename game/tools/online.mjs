@@ -9,6 +9,7 @@ import { createServer } from 'node:net'
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { onScreen } from './lib/onscreen.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const W = 600, H = 420
@@ -63,6 +64,14 @@ const click = async (sx, sy, wait = 550) => {
   await page.mouse.click(box.x + box.w * (sx / W), box.y + box.h * (sy / H))
   await new Promise(r => setTimeout(r, wait))
 }
+const { find, findButton, texts } = onScreen(page)
+/** Press the thing on screen that says this. Fails the run if it is not there. */
+const press = async (re, wait = 700) => {
+  const at = await findButton(re) ?? await find(re)
+  if (!at) { ok(`something on screen says ${re}`, false, JSON.stringify(await texts())); return false }
+  await click(at.x, at.y, wait)
+  return true
+}
 const farm = (expr) => page.evaluate(new Function(`const f = window.__game.registry.get('farm'); const s = f?.state; return (${expr})`))
 const scene = () => page.evaluate(() => window.__game.scene.scenes.filter(x => x.scene.isActive()).map(x => x.scene.key).join('+'))
 const ask = (path, body) => fetch(SERVER + path, {
@@ -103,7 +112,7 @@ ok('the field is sown', !!crop, String(crop))
 eq('and the server has the same field', (await serverState()).plots[0].cropId, crop)
 
 /* ------------------------------------------------------------ working */
-await click(352, 14, 800)                                    // WATER ALL
+await press(/WATER ALL|รดน้ำทั้งแปลง/, 800)
 const watered = await farm('s.plots[0].tiles.filter(t => t.watered).length')
 eq('every tile is watered', watered, 12)
 eq('and the server counted the energy', (await serverState()).energy, await farm('s.energy'))
@@ -153,10 +162,11 @@ if (openIdx >= 0) {
   eq('the barn the server filled shows on the board', await farm(`s.barn.crops['${order.cropId}']`), need)
 
   const before = await farm('s.money')
-  const CARD_W = 180, GAP = 8
-  const n = board.orders.length
-  const startX = (W - (n * CARD_W + (n - 1) * GAP)) / 2
-  await click(startX + openIdx * (CARD_W + GAP) + CARD_W / 2, 166, 900)
+  // Only the card we just stocked can say DELIVER: a finished order says it is
+  // delivered and an unstocked one says nothing is held. So the words alone
+  // identify the right card, and no copy of the board's layout is needed here.
+  const delivered = await press(/^(Deliver|ส่ง) /, 900)
+  ok('the order card offers a delivery', delivered)
 
   const after = await farm('s.money')
   const paid = after - before
@@ -180,6 +190,52 @@ await click(76, 396, 700)                                    // back to the shop
 await click(92, 396, 800)                                    // and into the market again
 const reread = await farm('s.market.orders.map(o => o.quota)')
 eq('an edited board is replaced by the server\'s', reread, (await serverState()).market.orders.map(o => o.quota))
+
+/* ----------------------------------- the price the board quotes is the real one */
+// Saturation is the one rule that makes a price fall while nothing else about
+// the farm has changed, which is exactly why a player reads it as a bug. The
+// number on the button is drawn by the browser out of its own copy of the
+// rules; the money is paid by the server out of its copy. If those two ever
+// disagree the farm is quoting a price it will not honour, and no other test
+// here would notice — both halves would still be internally consistent.
+{
+  const id = await page.evaluate(() => window.__game.registry.get('data').crops[0].id)
+  const reload = async () => {
+    await page.evaluate(() => {
+      const m = window.__game.scene.getScene('Market')
+      return m.farm.sync().then(() => m.render())
+    })
+    await new Promise(r => setTimeout(r, 500))
+  }
+
+  await ask('/test/grant', { crops: { [id]: 20 } })
+  await reload()
+  const first = await findButton(/^\$ [\d,]+$/)
+  ok('the board offers a price for what the barn holds', !!first, JSON.stringify(await texts()))
+  const quotedFirst = Number(first.text.replace(/\D/g, ''))
+  const beforeFirst = await farm('s.money')
+  await click(first.x, first.y, 900)
+  eq('the server pays exactly what the board quoted', await farm('s.money') - beforeFirst, quotedFirst)
+  eq('and the browser ends up on the server\'s money', await farm('s.money'), (await serverState()).money)
+  eq('the crop left the barn on the server', (await serverState()).barn.crops[id] ?? 0, 0)
+
+  // Now the same crop again, same quantity. Twenty of it have just gone to
+  // market, so the second load must fetch less than the first — and the board
+  // has to say so before the sale, not after it.
+  await ask('/test/grant', { crops: { [id]: 20 } })
+  await reload()
+  const second = await findButton(/^\$ [\d,]+$/)
+  ok('the board prices the second load too', !!second, JSON.stringify(await texts()))
+  const quotedSecond = Number(second.text.replace(/\D/g, ''))
+  ok('flooding the market shows a lower price for the same crop',
+    quotedSecond < quotedFirst, `${quotedFirst} then ${quotedSecond}`)
+  const beforeSecond = await farm('s.money')
+  await click(second.x, second.y, 900)
+  eq('and the server pays that lower price to the coin',
+    await farm('s.money') - beforeSecond, quotedSecond)
+  eq('the server counted the flood', (await serverState()).market.sold[id] >= 40, true)
+  await page.screenshot({ path: 'shots/online/4-saturation.png' })
+}
 
 /* -------------------------------------- a sale the rescue loan swallows whole */
 // The loan is repaid off the top, so a sale can keep no money and still be a

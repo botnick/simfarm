@@ -2,7 +2,7 @@
 // later refactor cannot quietly change how the farm works.
 import { readFileSync } from 'node:fs'
 import {
-  newGame, plant, applyTool, canApply, endDay, harvestPlot, waterPlot, clearPlot,
+  newGame, plant, applyTool, canApply, endDay, harvestPlot, waterPlot, clearPlot, reconcile,
   buySeed, buySupply, buyAnimal, feedAnimals, craft, recipeReady,
   cropById, cropCount, goodCount, sellCrop, sellGood, byId, travel,
   levelOf, availableCrops, unitPrice, quoteCrop, takeMilestones, countOf, indexOf,
@@ -131,6 +131,68 @@ const fresh = (level = null) => {
   s.plots[0].tiles.forEach(t => t.stage = R.stage.ripe)
   ok('a field with no crop cannot be picked', !canApply(s, data, 0, 0, 'harvest'))
   eq('and pick-all takes nothing from it', harvestPlot(s, data, 0), 0)
+}
+
+{
+  // A farm saved before somebody edited the game's data. Adding or removing a
+  // crop is documented as an edit to one JSON file, and a save outlives it.
+  // Growing something the game no longer has used to end the game outright: the
+  // night looks the crop up to age it, finds nothing, and throws — so the day
+  // could never be ended again, and every retry threw in the same place.
+  const s = fresh()
+  buySeed(s, data, 'turnip'); plant(s, data, 0, 'turnip')
+  s.plots[0].cropId = 'crop-that-was-removed'
+  s.barn.crops['crop-that-was-removed'] = 5
+  s.seeds['crop-that-was-removed'] = 2
+  s.animals['animal-that-was-removed'] = 3
+  s.fed['animal-that-was-removed'] = 1
+  s.barn.goods['good-that-was-removed'] = 4
+  s.pending.push({ id: 'recipe-that-was-removed', daysLeft: 2 })
+  s.market.orders.push({ cropId: 'crop-that-was-removed', quota: 12, filled: 0 })
+
+  let threw = null
+  try { endDay(structuredClone(s), data) } catch (e) { threw = e }
+  ok('a save holding a vanished crop is what used to end the game', threw !== null)
+
+  const lost = reconcile(s, data)
+  eq('the vanished crop is named as lost', lost.crops.includes('crop-that-was-removed'), true)
+  eq('and so is the animal', lost.animals, ['animal-that-was-removed'])
+  eq('and the good', lost.goods, ['good-that-was-removed'])
+  eq('and the batch that could never finish', lost.recipes, ['recipe-that-was-removed'])
+  eq('the field it was growing in is counted', lost.plots, 1)
+  eq('and the order nobody could ever fill', lost.orders, 1)
+
+  eq('the seed is gone from the bag', s.seeds['crop-that-was-removed'], undefined)
+  eq('and out of the barn', s.barn.crops['crop-that-was-removed'], undefined)
+  eq('the herd that was not there is gone', s.animals['animal-that-was-removed'], undefined)
+  eq('and is not still being fed', s.fed['animal-that-was-removed'], undefined)
+  // The land is the part worth keeping: the crop is gone, the field is not.
+  eq('the field is empty rather than lost', s.plots[0].cropId, null)
+  ok('and every tile in it is bare', s.plots[0].tiles.every(t => t.stage === R.stage.empty))
+  buySeed(s, data, 'turnip')
+  ok('so it can be sown again', plant(s, data, 0, 'turnip'))
+  let after = null
+  try { endDay(s, data) } catch (e) { after = e }
+  eq('and the night runs', after, null)
+
+  // Nothing is taken from a save that agrees with the data already.
+  const untouched = fresh()
+  buySeed(untouched, data, 'turnip'); plant(untouched, data, 0, 'turnip')
+  const before = JSON.stringify(untouched)
+  const none = reconcile(untouched, data)
+  eq('a save that matches the data is left alone', JSON.stringify(untouched), before)
+  eq('and nothing is reported lost', none.crops.length + none.animals.length + none.goods.length
+    + none.recipes.length + none.plots + none.orders, 0)
+
+  // The other way a field can strand: it holds a crop while every tile is
+  // already bare, so nothing grows, nothing can be cleared and nothing sown.
+  const stuck = fresh()
+  buySeed(stuck, data, 'turnip'); plant(stuck, data, 0, 'turnip')
+  stuck.plots[0].tiles.forEach(t => { t.stage = R.stage.empty })
+  reconcile(stuck, data)
+  eq('a field held by a crop with nothing in it is released', stuck.plots[0].cropId, null)
+  buySeed(stuck, data, 'turnip')
+  ok('and can be sown', plant(stuck, data, 0, 'turnip'))
 }
 
 {

@@ -877,6 +877,80 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   rmSync(dir, { recursive: true, force: true })
 }
 
+/* ------------------------- a farm saved under one rule book, opened under the next */
+{
+  // Adding or removing a crop is documented as an edit to one JSON file, and a
+  // saved farm outlives that edit. The signature proves the save was ours and
+  // the schema version proves its shape — neither says anything about which
+  // crops exist. A farm growing a crop the edit removed could still be resumed,
+  // and then could not be played at all: the night looked the crop up to age
+  // it, found nothing, and threw. Every attempt to end the day failed in the
+  // same place, so the farm was finished, and the server answered with the
+  // exception text — "Cannot read properties of undefined (reading 'pest')" —
+  // which told the player nothing and told a stranger about the insides.
+  const { mkdtempSync, writeFileSync, rmSync, readFileSync: read } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const dir = mkdtempSync(join(tmpdir(), 'simfarm-rulebook-'))
+  const long = 'k'.repeat(40)
+
+  const boot = async (env) => {
+    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+      env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_ENDDAY_MS: '0', SIMFARM_STRICT: '', ...env },
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    const url = await new Promise((resolve, reject) => {
+      let out = ''
+      child.stdout.on('data', (d) => {
+        out += d
+        const m = out.match(/farm server on \S*?(\d+)/)
+        if (m) resolve(`http://127.0.0.1:${m[1]}`)
+      })
+      setTimeout(() => reject(new Error(`second server did not start: ${out.slice(0, 200)}`)), 8000)
+    })
+    const send = (path, body, session) => fetch(url + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(session ? { 'x-session': session } : {}) },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(5000),
+    }).then(async r => ({ status: r.status, body: await r.json() }))
+    return { child, send }
+  }
+
+  // The same signing secret both times, so the save that comes out of the first
+  // server is one the second will accept.
+  const before = await boot({})
+  const opened = await before.send('/session', {})
+  const S = opened.body.session
+  const crop = DATA.crops.find(c => (c.unlockLevel ?? 1) === 1).id
+  await before.send('/intent', { type: 'buySeed', cropId: crop }, S)
+  const planted = await before.send('/intent', { type: 'plant', plot: 0, cropId: crop }, S)
+  eq('a farm is growing something', planted.body.state.plots[0].cropId, crop)
+  const saved = await before.send('/save', {}, S)
+  eq('and saves', saved.status, 200)
+  before.child.kill()
+
+  // Now somebody removes that crop and deploys.
+  const edited = join(dir, 'game.json')
+  const book = JSON.parse(read(join(HERE, '../game/public/data/game.json'), 'utf8'))
+  book.crops = book.crops.filter(c => c.id !== crop)
+  writeFileSync(edited, JSON.stringify(book))
+
+  const after = await boot({ SIMFARM_DATA: edited })
+  const resumed = await after.send('/session', { save: saved.body.save, signature: saved.body.signature })
+  eq('the save still opens', resumed.status, 200)
+  eq('the field it was growing in is empty rather than lost',
+    resumed.body.state.plots[0].cropId, null)
+  eq('and the crop is gone from the bag', resumed.body.state.seeds?.[crop] ?? 0, 0)
+
+  const night = await after.send('/intent', { type: 'endDay' }, resumed.body.session)
+  eq('and the farm can still be played', night.status, 200)
+  eq('the day really did advance', night.body.state.day, resumed.body.state.day + 1)
+  ok('and nothing about the server\'s insides was ever returned',
+    !JSON.stringify(night.body).includes('Cannot read properties'), JSON.stringify(night.body).slice(0, 160))
+  after.child.kill()
+  rmSync(dir, { recursive: true, force: true })
+}
+
 /* --------------------------- the two settings that decide how long a save lives */
 {
   // A save's lifetime and the end-of-day cooldown are security settings: a save

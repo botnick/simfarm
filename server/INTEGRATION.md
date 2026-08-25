@@ -38,6 +38,16 @@ Every route is POST unless noted, JSON in and out, session in `x-session`.
 | `/save`    | A signed envelope the client may keep                          |
 | `/end`     | Finish the session and hand back a final envelope               |
 
+A resumed save is reconciled against the rule book this server enforces before
+a session is handed out. The signature proves the save was ours and the schema
+version proves its shape; neither says anything about which crops exist, and a
+farm growing one that has since been removed cannot be played at all. Set
+`SIMFARM_DATA` to run a build against a different rule book.
+
+The server repeats back only the refusals it decided to make — `body too large`,
+`bad json`, `too many sessions`. Anything else is a fault, answered with a
+generic 500 and logged here rather than described to whoever asked.
+
 Three things make `/intent` safe to retry and impossible to race:
 
 - **`expectedRevision`** — every accepted change bumps a counter. A client that
@@ -254,11 +264,11 @@ for exists, and that every line that exists is reachable from the code.
 ## Checking a change did not break it
 
     cd game
-    npm test             # 371  the rules
-    npm run e2e          # 214  the game in a browser, offline
-    npm run online       #  55  the game in a browser, against a real server
+    npm test             # 390  the rules
+    npm run e2e          # 221  the game in a browser, offline
+    npm run online       #  64  the game in a browser, against a real server
     npm run facade       #  57  what the browser does with every answer a server can give
-    npm run test:server  # 151  the server refusing what it should
+    npm run test:server  # 159  the server refusing what it should
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run reach        #  29  every crop, animal, recipe and reward is reachable

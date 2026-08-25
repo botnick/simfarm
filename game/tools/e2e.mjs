@@ -1240,6 +1240,48 @@ check('a saved game loads', await scene() === 'Farm')
 eq('the loaded game keeps its money', await read('s.money'), 4242)
 await shot('11-loaded')
 
+/* ------------------------------------------ a save older than the rule book */
+// Adding or removing a crop is documented as an edit to one JSON file, and a
+// saved farm outlives that edit. A field growing a crop the edit removed used
+// to end the game outright: the night looked it up to age it, found nothing,
+// and threw, so the day could never be ended again and the throw repeated for
+// ever. This is that save, played by clicking.
+{
+  await poke(`s.plots[0].cropId = '${firstCrop.id}'; s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.seed })`)
+  await click(522, 358, 500)                                // SAVE
+  // Age the slot the way a deploy would: the farm still names a crop, the rule
+  // book no longer has one by that name.
+  const rewritten = await page.evaluate(() => {
+    const slot = JSON.parse(localStorage.getItem('simfarm'))
+    slot.state.plots[0].cropId = 'crop-that-was-removed'
+    slot.state.seeds['crop-that-was-removed'] = 3
+    slot.state.animals['animal-that-was-removed'] = 2
+    localStorage.setItem('simfarm', JSON.stringify(slot))
+    return slot.state.plots[0].cropId
+  })
+  eq('the slot now names a crop the game does not have', rewritten, 'crop-that-was-removed')
+
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }); await wait(2200)
+  await click(392, 284, 900)                                // LOAD GAME
+  check('the farm still opens', await scene() === 'Farm', await scene())
+  const told = await appears(/THE FARM HAS CHANGED|ไร่มีการเปลี่ยนแปลง/)
+  check('and says the game changed under it rather than saying nothing',
+    told.found, JSON.stringify(told.texts))
+  await shot('11b-rulebook-changed')
+  eq('the field is empty rather than lost', await read('s.plots[0].cropId'), null)
+  eq('and the crop is gone from the bag', await read(`s.seeds['crop-that-was-removed'] ?? 0`), 0)
+  eq('and the herd that was not there is gone', await read(`s.animals['animal-that-was-removed'] ?? 0`), 0)
+
+  // The thing that used to be impossible.
+  const dayBefore = await read('s.day')
+  await poke('s.energy = 100')
+  await click(522, 394, 1200)                               // END DAY
+  eq('and the day can be ended', await read('s.day'), dayBefore + 1)
+
+  // Put the farm back where the rest of the run expects it.
+  await poke('s.money = 4242')
+}
+
 /* ------------------------------------------------------------ end of year */
 // The farm is endless by default. A host game can cap it, so drive that path by
 // setting a limit on the live rules and stepping onto it.

@@ -30,12 +30,20 @@ transport can import it directly and leave `server/` alone.
 Adding a crop, an animal, a recipe or a milestone is an edit to
 `game/public/data/game.json`. Nothing in the code holds a list of them.
 
+A farm saved before such an edit outlives it, so both halves of the game
+reconcile a save against the rule book they are about to play it under: anything
+that no longer exists is dropped, and a field growing a crop that was removed is
+emptied rather than lost. Without that the night looked the crop up to age it,
+found nothing, and threw — so the day could never be ended again and the farm was
+finished, offline and online alike. The offline game says so with a banner; the
+server logs what it dropped.
+
 ## Checking a change
 
-    npm test             # 371  the rules
-    npm run e2e          # 214  the game in a browser, offline
-    npm run online       #  55  the game in a browser, against a real server
-    npm run test:server  # 151  the server refusing what it should
+    npm test             # 390  the rules
+    npm run e2e          # 221  the game in a browser, offline
+    npm run online       #  64  the game in a browser, against a real server
+    npm run test:server  # 159  the server refusing what it should
     npm run facade       #  57  what the browser does with every answer a server can give
     npm run reach        #  29  every crop, animal, recipe and reward is reachable,
                          #      and both languages say everything
