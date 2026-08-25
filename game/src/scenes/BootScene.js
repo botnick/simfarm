@@ -35,11 +35,17 @@ export default class BootScene extends Phaser.Scene {
         else this.load.svg(`crop:${c.art}:${s}`, `assets/crops/${c.art}/${s}.svg`, { scale: 1.6 * RENDER_SCALE })
       }
     }
+    // Props and tool icons that have been redrawn take their own art; the rest
+    // are still the frames lifted out of the SWF, one at a time as they are
+    // replaced. Named here rather than guessed at, so a missing file is a
+    // missing file rather than a silent fallback to somebody else's drawing.
+    const DRAWN = { pest: 'prop-pest', rain: 'prop-rain', soil: 'prop-soil' }
     for (const name of ['pest', 'egg', 'chicken', 'chicken_2', 'chicken_3', 'chicken_4', 'energy_fill',
       'supply_fertilizer', 'supply_pesticide', 'supply_feed']) {
-      this.load.svg(`art:${name}`, `assets/art/${name}.svg`, { scale: 1.6 * RENDER_SCALE })
+      if (DRAWN[name]) this.load.image(`art:${name}`, `assets/goods/${DRAWN[name]}.png`)
+      else this.load.svg(`art:${name}`, `assets/art/${name}.svg`, { scale: 1.6 * RENDER_SCALE })
     }
-    for (const t of data.tools) this.load.svg(`art:tool_${t.id}`, `assets/art/tool_${t.id}.svg`, { scale: 1.4 * RENDER_SCALE })
+    for (const t of data.tools) this.load.image(`art:tool_${t.id}`, `assets/goods/tool-${t.id}.png`)
     // Goods that have real art declare it; the rest are drawn by the UI.
     for (const g of data.goods) if (g.image) this.load.image(`good:${g.id}`, `assets/goods/${g.image}.png`)
     // Only the chicken came out of the SWF; the rest of the livestock was drawn
