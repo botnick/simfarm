@@ -1009,7 +1009,9 @@
       "new-morning",
       "rain-overnight",
       "pest-appears",
-      "refused"
+      "refused",
+      "chime",
+      "pop"
     ],
     "music": {
       "farm": "ambient-farm-day",

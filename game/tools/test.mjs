@@ -1295,5 +1295,37 @@ const fresh = (level = null) => {
   eq('and neither is a tool asked for by something that is not a name', toolById(data, 7), undefined)
 }
 
+/* ------------------------------------------- cues the game asks for by name */
+{
+  // Playing a cue the data file does not name is silence, and silence is the
+  // one failure a sound has that nothing reports: no error, no warning, the
+  // moment simply passes without its noise. Two of them had been silent for a
+  // while — the chime for picking a field and sowing it, and the pop for
+  // watering and clearing — with the mp3s sitting on disk the whole time,
+  // unloaded, because the loader builds its manifest from this list.
+  const { readdirSync, readFileSync, statSync } = await import('node:fs')
+  const { join } = await import('node:path')
+
+  const played = new Set()
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) { walk(p); continue }
+      if (!name.endsWith('.js')) continue
+      const src = readFileSync(p, 'utf8')
+      // sfx(scene, 'name') and this.sfx('name'). Anything built from a variable
+      // is checked by the data instead — every tool cue, every animal cue.
+      for (const m of src.matchAll(/\bsfx\s*\(\s*[A-Za-z_.]+\s*,\s*'([a-z0-9-]+)'/g)) played.add(m[1])
+      for (const m of src.matchAll(/\bthis\.sfx\(\s*'([a-z0-9-]+)'/g)) played.add(m[1])
+    }
+  }
+  walk(new URL('../src', import.meta.url).pathname)
+
+  const named = new Set([...(data.audio.sfx ?? []), ...Object.values(data.audio.toolCue ?? {})])
+  eq('every cue the game plays by name is one the data file names',
+    [...played].filter(c => !named.has(c)).sort(), [])
+  ok('and the game plays some cues at all, or this proves nothing', played.size > 5, `${played.size}`)
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)
