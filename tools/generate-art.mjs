@@ -76,8 +76,12 @@ async function draw(name, subject) {
   const body = new FormData()
   body.set('model', 'nano-banana-pro')
   body.set('prompt', `${subject}. ${STYLE}`)
-  if (existsSync(REFERENCE)) {
-    const png = readFileSync(REFERENCE)
+  const plan = name.startsWith('scene-') && name.endsWith('-full')
+    ? join(HERE, `../generated/_plans/${name.slice('scene-'.length, -'-full'.length)}.png`)
+    : null
+  const guide = plan && existsSync(plan) ? plan : REFERENCE
+  if (existsSync(guide)) {
+    const png = readFileSync(guide)
     body.set('image', new Blob([png], { type: 'image/png' }), 'reference.png')
   }
   const started = await fetch(`${API}/generate_image`, {
@@ -125,13 +129,34 @@ const SHEET = (plant) => [
   'the seeds in the first drawing rest directly on white, not on earth',
 ].join('. ')
 
+/**
+ * A whole scene, painted onto a plan.
+ *
+ * Every clickable thing in a backdrop is bound to a rectangle the game already
+ * listens to, so the house cannot simply go wherever it looks best. The plan
+ * drawn by tools/scene-plan.py puts a flat block at each of those rectangles;
+ * this asks for the scene to be painted over it, keeping every block where it
+ * is. The plan is our own drawing, so nothing about the original game's layout
+ * comes along with it.
+ */
+const SCENE = (what) => [
+  `A ${what}, seen from above at a slight angle, filling the whole frame edge to edge`,
+  'THE ATTACHED PLAN IS A LAYOUT, NOT A PICTURE: paint the scene over it and keep every coloured block exactly where it sits, at the same size and shape',
+  'brown diamonds are tilled fields of bare earth, the red-roofed block is the farm cottage, the tan block is the wooden hen house, the pale ellipse is a dirt road leaving the farm, and the green is grass',
+  'fill the grass between them with small scenery — bushes, tufts, flowers, a fence, a water trough — so no large area is empty',
+  'one continuous scene with everything standing on the same ground, not separate objects placed on a background',
+].join('. ')
+
 const args = process.argv.slice(2)
 const sheet = args[0] === '--sheet'
+const scene = args[0] === '--scene'
 const jobs = args[0] === '--batch'
   ? Object.entries(JSON.parse(readFileSync(args[1], 'utf8')))
   : sheet
     ? [[`${args[1]}-sheet`, SHEET(args.slice(2).join(' '))]]
-    : [[args[0], args.slice(1).join(' ')]]
+    : scene
+      ? [[`scene-${args[1]}-full`, SCENE(args.slice(2).join(' '))]]
+      : [[args[0], args.slice(1).join(' ')]]
 
 for (const [name, subject] of jobs) {
   if (!name || !subject) { console.error('usage: generate-art.mjs <name> "<what it is>"'); process.exit(1) }
