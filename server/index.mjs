@@ -105,6 +105,11 @@ const EDGE_RATE = { windowMs: 10_000, max: numbers.edgeRate }
 // from one machine is also tight enough to lock a hundred honest players out.
 // A host that can see real client addresses should do this at its edge instead.
 const NEW_SESSION_RATE = { windowMs: 60_000, max: numbers.newSessionRate }
+// Serving a remembered answer is a map lookup and a copy, so a client sorting
+// out a lost response is not the thing this server needs protecting from. It
+// still gets a ceiling, because a replay is otherwise a way to keep talking
+// after the ordinary budget is spent.
+const REPLAY_RATE = { windowMs: 10_000, max: Math.max(RATE.max * 4, 200) }
 const END_DAY_COOLDOWN_MS = numbers.endDayCooldown
 // A hook for the end-to-end suite to put something in a farm's barn without
 // playing eight days to get it. It is a hole by definition, so it exists only
@@ -144,6 +149,38 @@ const hits = new Map()
  * wall clock.
  */
 const monotonic = () => performance.now()
+
+/**
+ * Request ids are cache keys, so they have to be things a cache can key on:
+ * short, present, and comparable by value.
+ */
+const REQUEST_ID_MAX = 128
+const usableRequestId = (v) => typeof v === 'string' && v.length > 0 && v.length <= REQUEST_ID_MAX
+
+/**
+ * What a request is actually asking for, as one string, so a replayed id can be
+ * checked against the ask it was first used for. The type and the arguments,
+ * with the bookkeeping fields left out — those are about the delivery of the
+ * ask, not the ask itself.
+ */
+function askedFor(body) {
+  const { requestId, expectedRevision, ...rest } = body ?? {}
+  return canonical(rest)
+}
+
+/**
+ * A value written the same way every time it means the same thing.
+ *
+ * Sorting only the top level would have called {a, b} and {b, a} different asks
+ * the moment an intent took a nested argument, and refused a retry that was
+ * word for word the same one. Arrays keep their order, because for an array the
+ * order is part of what was asked.
+ */
+function canonical(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`
+  return `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`
+}
 
 function rateLimited(key, rate = RATE) {
   const now = monotonic()
@@ -377,7 +414,17 @@ const server = createServer(async (req, res) => {
     // store holds rather than the text they sent: keying on an unvalidated
     // header let a caller mint a fresh budget per request simply by changing it,
     // and grow the limiter's map with every one.
-    if (rateLimited(`s:${session.id}`)) return json(res, 429, { error: 'slow down' })
+    // A retry of an intent this session already answered is served from the
+    // cache below and costs nothing, so refusing it here defeated the point of
+    // having request ids at all: a client whose response went missing retried,
+    // was told to slow down, and had no way left to find out what happened. The
+    // decision is carried down instead, and applied to everything that is not
+    // such a replay. Replays get their own, looser budget so this is not a way
+    // to talk to the server for free.
+    const paced = rateLimited(`s:${session.id}`)
+    if (paced && !(req.method === 'POST' && url.pathname === '/intent')) {
+      return json(res, 429, { error: 'slow down' })
+    }
 
     /**
      * Is this still the session it was a moment ago?
@@ -399,11 +446,37 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req)
       if (!stillOurs()) return json(res, 401, { error: 'session expired' })
 
+      // The id has to be something a Map can match on. An object or an array is
+      // never equal to the one sent before, so it could never be a hit, while
+      // every one of them took a slot in a cache that is deliberately bounded —
+      // enough of them and the retries that matter were evicted.
+      if (body.requestId !== undefined && !usableRequestId(body.requestId)) {
+        return json(res, 400, { error: 'requestId must be a short non-empty string' })
+      }
+      // Absent has always meant 'do not check', and absent has always included
+      // null, so that stays as it is. Anything else claiming to be a revision is
+      // a client bug worth naming rather than reading as a mismatch.
+      if (body.expectedRevision != null && !Number.isSafeInteger(body.expectedRevision)) {
+        return json(res, 400, { error: 'expectedRevision must be a whole number' })
+      }
+
       // A retry of a request already handled returns exactly what it returned
       // the first time, so a dropped response cannot sell the same crop twice.
-      if (body.requestId && session.results.has(body.requestId)) {
-        return json(res, 200, session.results.get(body.requestId))
+      const held = body.requestId ? session.results.get(body.requestId) : undefined
+      if (held) {
+        // The id says "this is the same ask as before". If the ask is not in
+        // fact the same, answering with the old result reports a success for
+        // something that never happened — so say what went wrong instead.
+        if (held.asked !== askedFor(body)) {
+          return json(res, 409, { error: 'that requestId was used for a different intent' })
+        }
+        if (rateLimited(`replay:${session.id}`, REPLAY_RATE)) {
+          return json(res, 429, { error: 'slow down' })
+        }
+        return json(res, 200, held.response)
       }
+      if (paced) return json(res, 429, { error: 'slow down' })
+
       // A client that thinks it is on an older revision has missed something.
       if (body.expectedRevision != null && body.expectedRevision !== session.revision) {
         return json(res, 409, { error: 'out of date', revision: session.revision, state: view(session, DATA) })
@@ -476,7 +549,7 @@ const server = createServer(async (req, res) => {
         milestones: session.outbox,
         state: view(session, DATA),
       }
-      store.remember(session, body.requestId, response)
+      store.remember(session, body.requestId, response, askedFor(body))
       return json(res, 200, response)
     }
 
@@ -510,8 +583,10 @@ const server = createServer(async (req, res) => {
       // cached response carries the outbox as it was. Left alone, replaying an
       // old request id would hand back an event the host has already settled.
       for (const [requestId, cached] of session.results) {
-        if (!cached?.milestones?.length) continue
-        session.results.set(requestId, { ...cached, milestones: cached.milestones.filter(m => !done.has(m.eventId)) })
+        const kept = cached?.response
+        if (!kept?.milestones?.length) continue
+        session.results.set(requestId,
+          { ...cached, response: { ...kept, milestones: kept.milestones.filter(m => !done.has(m.eventId)) } })
       }
       return json(res, 200, { ok: true, settled: done.size, ignored: unknown, pending: session.outbox.length })
     }

@@ -120,13 +120,16 @@ export function createStore({
     noteSettled(farmId, eventIds) { ledger.noteSettled(farmId, [...eventIds]) },
     /** Has this event already been collected on this farm? */
     isSettled(farmId, eventId) { return ledger.isSettled(farmId, eventId) },
-    remember(session, requestId, response) {
+    remember(session, requestId, response, asked = null) {
       if (!requestId) return
       // A snapshot, not a reference. The response is built from the live farm,
       // so keeping it as it was means keeping a copy: otherwise replaying a
       // request id hands back yesterday's revision attached to today's barn,
       // which is neither the old answer nor the new one.
-      session.results.set(requestId, clone(response))
+      // The ask rides along with the answer: an id reused for a different
+      // intent must be told apart from a genuine retry, or it is handed a
+      // success belonging to something else.
+      session.results.set(requestId, { asked, response: clone(response) })
       // Keep the map from growing without bound on a long session.
       if (session.results.size > idempotencyMax) {
         const oldest = session.results.keys().next().value

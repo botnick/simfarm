@@ -29,7 +29,8 @@
     "fatal": "node tools/fatal.mjs",
     "fuzz": "node tools/fuzz.mjs",
     "production": "node tools/production.mjs",
-    "faithful": "node tools/faithful.mjs"
+    "faithful": "node tools/faithful.mjs",
+    "layout": "node tools/layout.mjs"
   },
   "keywords": [],
   "author": "",

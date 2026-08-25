@@ -213,6 +213,7 @@ export default class FarmScene extends Phaser.Scene {
   async toShop() {
     const before = this.state.energy
     await this.farm.travel()
+    if (!this.scene.isActive()) return
     if (this.state.energy === before) { toast(this, WIDTH / 2, 320, t('farm.tooTired'), '#ffd6d6'); return }
     this.scene.start('Shop')
   }
@@ -231,6 +232,7 @@ export default class FarmScene extends Phaser.Scene {
     // save taken once and then played past would be refused on load — which is
     // no save at all.
     const ok = this.farm.online ? await this.farm.keepSaved() : save(this.state)
+    if (!this.scene.isActive()) return
     toast(this, WIDTH - 78, HEIGHT - 84, ok ? t('farm.saved') : t('farm.saveFailed'), ok ? '#ffffff' : '#ffd6d6')
   }
 
@@ -241,6 +243,7 @@ export default class FarmScene extends Phaser.Scene {
     // morning. Ignore the press instead.
     if (this.farm.busy) return
     const report = await this.farm.endDay()
+    if (!this.scene.isActive()) return
     if (report?.refused) {
       sfx(this, 'refused')
       toast(this, WIDTH / 2, 330, t('farm.nothingToDo'), '#ffd6d6')

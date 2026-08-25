@@ -9,6 +9,10 @@ const DEVICES = [
   { name: 'phone-portrait', width: 390, height: 844 },
   { name: 'phone-landscape', width: 844, height: 390 },
   { name: 'tablet-portrait', width: 820, height: 1180 },
+  // The tablet was only ever checked stood up. Turned, it is the widest board
+  // the game is asked to fill, and the one where the stage has the most room
+  // left over at the sides.
+  { name: 'tablet-landscape', width: 1180, height: 820 },
   // The player can refuse the turn and hold the phone as it is; that path has
   // its own pointer mapping, so it needs its own check.
   { name: 'phone-upright', width: 390, height: 844, upright: true },

@@ -64,9 +64,20 @@ Three things make `/intent` safe to retry and impossible to race:
   the farm itself.
 - **`requestId`** — a repeat of a request already handled returns exactly what
   it returned the first time. A dropped response cannot sell the same crop
-  twice.
+  twice. It must be a non-empty string of at most 128 characters, and it is
+  bound to the intent it was first used with: sending the same id with a
+  different intent is refused with `409` rather than answered with the earlier
+  result, which would report a success for something that never happened.
+  Retries are answered even when the session is otherwise being paced — being
+  told to slow down is not an answer to "what happened to my request".
 - **One live session per farm.** Resuming a save takes the farm over and the
   previous session stops working, including any request already in flight.
+
+The remembered answers live in the session, in memory, and are bounded. They
+cover the case they exist for — a response lost between here and the client —
+and they do not survive a restart or a resume. If a host needs exactly-once
+across those, it has to come from the host's own transaction around the state
+it persists; this server cannot provide it and does not claim to.
 
 ---
 

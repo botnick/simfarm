@@ -150,6 +150,10 @@ export default class PlotScene extends Phaser.Scene {
     this.waterAll = button(this, 352, 14, 96, 21, t('plot.waterAll'), async () => {
       const before = this.wateredCount()
       await this.farm.waterPlot({ plot: this.plotIndex })
+    // The player can leave while this is in flight. What the server accepted
+    // stands, but this screen is gone, and drawing on it is at best a lie about
+    // somewhere the player is not looking.
+    if (!this.scene.isActive()) return
       const n = this.wateredCount() - before
       toast(this, 352, 38, n ? t('plot.watered', n) : t('plot.nothingToWater'), n ? '#dff1ff' : '#ffd6d6')
       if (n) this.sfx('pop')
@@ -158,6 +162,10 @@ export default class PlotScene extends Phaser.Scene {
     this.pickAll = button(this, 456, 14, 96, 21, t('plot.pickAll'), async () => {
       const before = this.barnCount()
       await this.farm.harvestPlot({ plot: this.plotIndex })
+    // The player can leave while this is in flight. What the server accepted
+    // stands, but this screen is gone, and drawing on it is at best a lie about
+    // somewhere the player is not looking.
+    if (!this.scene.isActive()) return
       const n = this.barnCount() - before
       toast(this, 456, 38, n ? t('plot.picked', n) : t('plot.nothingRipe'), n ? '#ffe9a8' : '#ffd6d6')
       if (n) this.sfx('chime')
@@ -172,6 +180,10 @@ export default class PlotScene extends Phaser.Scene {
     this.clearAll = button(this, 248, 14, 96, 21, t('plot.clearAll'), async () => {
       const before = this.deadCount()
       await this.farm.clearPlot({ plot: this.plotIndex })
+    // The player can leave while this is in flight. What the server accepted
+    // stands, but this screen is gone, and drawing on it is at best a lie about
+    // somewhere the player is not looking.
+    if (!this.scene.isActive()) return
       const n = before - this.deadCount()
       toast(this, 248, 38, n ? t('plot.cleared', n) : t('plot.nothingDead'), n ? '#d8ffd0' : '#ffd6d6')
       if (n) this.sfx('pop')
@@ -201,7 +213,12 @@ export default class PlotScene extends Phaser.Scene {
     // Asked locally only to explain a refusal; the authority decides.
     if (!canApply(this.state, this.data_, this.plotIndex, i, this.tool)) { this.explain(i); return }
     const barnBefore = this.barnCount()
-    await this.farm.tool({ plot: this.plotIndex, tile: i, toolId: this.tool })
+    // canApply above asked the local mirror, which is what the browser last
+    // heard. Two quick clicks both pass it, the second is refused, and playing
+    // the sound and ringing the tile anyway told the player it landed.
+    const did = await this.farm.tool({ plot: this.plotIndex, tile: i, toolId: this.tool })
+    if (!this.scene.isActive()) return
+    if (!did) { this.refresh(); return }
     toolSfx(this, this.tool)
 
     // The tool lands on the tile it was aimed at. Picking punches the plant it
@@ -275,8 +292,11 @@ export default class PlotScene extends Phaser.Scene {
         // boundary, and the close-and-refresh could run after the field had
         // already been left.
         zone.on('pointerup', owned(async () => {
-          await this.farm.plant({ plot: this.plotIndex, cropId: id })
+          const sown = await this.farm.plant({ plot: this.plotIndex, cropId: id })
           if (!this.scene.isActive()) return
+          // A refusal leaves the picker open — closing it on the way out looked
+          // exactly like sowing, and onRefused has already said why not.
+          if (!sown) { this.refresh(); return }
           this.sfx('chime'); close(); this.refresh()
         }, 'choosing a seed'))
         zone.on('pointerover', () => { g.clear(); g.fillStyle(C.green, 1).fillRoundedRect(left + 12, y - 17, W - 24, 34, 9); g.fillStyle(0xfffaf0, 1).fillRoundedRect(left + 14, y - 15, W - 28, 30, 7) })

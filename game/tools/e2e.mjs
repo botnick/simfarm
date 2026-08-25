@@ -261,6 +261,53 @@ eq('water-all waters every tile', watered, rules.tilesPerPlot)
 eq('watering costs one energy per tile', await read('s.energy'), energyBeforeWater - rules.tilesPerPlot)
 await shot('05-watered')
 
+/* --------------------------- an answer arriving after the screen was left */
+// The batch test further down covers the guard between one send and the next.
+// This is the other one: a single action whose answer comes back after the
+// player has already gone. Phaser does not object to drawing on a scene it has
+// shut down — it simply does it — so nothing throws, and the only evidence is a
+// redraw of a screen nobody is looking at. Count the redraw.
+{
+  const energyWas = await read('s.energy')
+  // WATER ALL disables itself when nothing is dry, and everything is wet by the
+  // time this runs — so without this the press lands on a dead button and every
+  // assertion below passes having tested nothing.
+  await poke('s.plots[0].tiles.forEach(t => { t.watered = 0 })')
+  await page.evaluate(() => {
+    const farm = window.__game.registry.get('farm')
+    const plot = window.__game.scene.getScene('Plot')
+    plot.refresh()                                 // let the button notice it is wanted
+    window.__redraws = 0
+    window.__release2 = null
+    window.__realWater = farm.waterPlot.bind(farm)
+    window.__realRefresh = plot.refresh.bind(plot)
+    farm.waterPlot = (args) => new Promise(r => { window.__release2 = () => r(window.__realWater(args)) })
+    plot.refresh = (...a) => { window.__redraws++; return window.__realRefresh(...a) }
+  })
+
+  await click(352, 13, 400)                        // WATER ALL, its answer held open
+  check('the watering is actually in flight', await page.evaluate(() => !!window.__release2))
+  await page.evaluate(() => { window.__redraws = 0 })   // baseline, taken after the press
+  await click(547, 364, 500)                       // and the player goes home
+  eq('the player left the field', await scene(), 'Farm')
+
+  await page.evaluate(() => window.__release2 && window.__release2())
+  await wait(700)
+  eq('the field it had left was not redrawn behind its back',
+    await page.evaluate(() => window.__redraws), 0)
+
+  await page.evaluate(() => {
+    const farm = window.__game.registry.get('farm')
+    const plot = window.__game.scene.getScene('Plot')
+    farm.waterPlot = window.__realWater
+    plot.refresh = window.__realRefresh
+  })
+  // Hand the run back the field it had: watered, at the energy it started with.
+  await poke(`s.plots[0].tiles.forEach(t => { t.watered = 1 }); s.energy = ${energyWas}`)
+  await click(158, 263, 600)                       // back into the field
+  check('the field opens again', await scene() === 'Plot', await scene())
+}
+
 /* ----------------------------------------------------------------- tools */
 // Water and pick are reached through the whole-field buttons above. The other
 // three are only ever one tile at a time, and each spends something a player has
@@ -487,6 +534,7 @@ await shot('07-sold')
 
     const shown = await texts()
     const orderNames = await read("s.market.orders.map(o => d.crops.find(c => c.id === o.cropId).name.en)")
+    check('the week put orders on the board at all', orderNames.length > 0, `${orderNames.length}`)
     check('the board lists this week\'s orders', orderNames.every(n => shown.some(t => t === n)),
       `orders ${JSON.stringify(orderNames)} shown ${JSON.stringify(shown)}`)
     check('the board says which week it is and when it turns',
@@ -559,11 +607,35 @@ await click(524, 394, 500)
     check('and the chip says so', now)
     await click(chipY.x, chipY.y, 400)
     eq('clicking again unmutes', await page.evaluate(() => localStorage.getItem('simfarm.muted')), '0')
+
+    // Muting stops the music bed; unmuting starts a fresh one. The stopped one
+    // was left in the sound manager, which never forgets a sound, so a player
+    // who fiddled with the toggle accumulated a dead bed per press for the rest
+    // of the session. Count them rather than trusting that it sounds right.
+    const beds = () => page.evaluate(() => {
+      const sc = window.__game.scene.scenes.find(x => x.scene.isActive())
+      return sc.sound.sounds.filter(s => s.key.startsWith('sfx:') && s.loop).length
+    })
+    const settled = await beds()
+    for (let i = 0; i < 4; i++) { await click(chipY.x, chipY.y, 260) }
+    eq('the toggle left the sound off where it found it',
+      await page.evaluate(() => localStorage.getItem('simfarm.muted')), '0')
+    const after = await beds()
+    // 'no more than before' passes on its own when there were none to begin with,
+    // which is the same vacuous green this suite has been finding elsewhere. Say
+    // that a bed is playing, and that the count is the one it started at.
+    check('a music bed is actually playing to count', settled >= 1, `${settled} beds`)
+    eq('and toggling the sound left exactly as many', after, settled)
   }
 }
 
 /* -------------------------------------------------------------- crafting */
 const recipe = await read('d.recipes.find(r => r.days > 0 && r.inputs.every(i => i.crop))')
+// Say so when there is nothing to cure. Six checks live in here, and a rule
+// book without a curing recipe would have skipped all of them and still
+// reported a clean run.
+check('the rule book has a recipe that cures from crops', !!recipe,
+  `recipes ${JSON.stringify(await read('d.recipes.map(r => r.id)'))}`)
 if (recipe) {
   // Recipes are gated by their ingredients' unlock level, so grow into them first.
   await poke(`s.xp = d.progression.thresholdFactor * 30 * 29`)
@@ -620,6 +692,54 @@ const fed = await read(`s.fed['${animal.id}']`)
 check('feeding feeds the whole flock', fed === await read(`s.animals['${animal.id}']`), `fed ${fed}`)
 eq('feeding consumes feed', await read(`s.supplies['${animal.feed}']`), feedBefore - fed)
 await shot('09-coop-fed')
+
+/* ------------------------------- leaving a screen stops what was not yet sent */
+// Feeding the flock is one press that sends one intent per species. The player
+// can leave while it is partway through, and the rest of it used to go anyway —
+// spending their energy on a screen they are no longer looking at, then drawing
+// the result on a scene that had already shut down.
+//
+// The guards that stop this are written out by hand in thirteen places, which
+// is exactly the kind of thing that gets dropped in a tidy-up, so it is worth a
+// test. No server needed: the first call is held open here, which is the same
+// shape as a slow answer.
+{
+  const animals = await read('d.animals.length')
+  check('there is more than one thing to feed, or this proves nothing', animals > 1, `${animals}`)
+
+  await page.evaluate(() => {
+    const farm = window.__game.registry.get('farm')
+    window.__feeds = 0
+    window.__release = null
+    window.__realFeed = farm.feed.bind(farm)
+    farm.feed = (args) => {
+      window.__feeds++
+      // Hold the first one open. The rest, if they come, resolve at once — so a
+      // count above one means the batch carried on after the screen was left.
+      if (window.__feeds === 1) return new Promise(r => { window.__release = () => r(window.__realFeed(args)) })
+      return window.__realFeed(args)
+    }
+  })
+
+  await page.keyboard.press('KeyF')                  // feed the whole flock
+  await wait(250)
+  eq('the first of the batch went out', await page.evaluate(() => window.__feeds), 1)
+
+  await page.keyboard.press('Escape')                // and the player leaves
+  await wait(400)
+  eq('the player is back on the farm', await scene(), 'Farm')
+
+  await page.evaluate(() => window.__release && window.__release())
+  await wait(700)
+  eq('the rest of the batch was not sent', await page.evaluate(() => window.__feeds), 1)
+
+  await page.evaluate(() => {
+    const farm = window.__game.registry.get('farm')
+    farm.feed = window.__realFeed
+  })
+  await click(337, 31, 700)                          // back into the coop for what follows
+  check('the coop opens again', await scene() === 'Coop', await scene())
+}
 await click(547, 364, 500)
 const eggsBefore = await read(`s.barn.goods['${animal.produces}'] || 0`)
 await click(522, 394, 800)                                  // END DAY

@@ -1,6 +1,6 @@
 // Lifts the art the game needs out of extracted/ into game/public/assets/.
 // Re-runnable and derived: nothing under game/public/assets is hand-edited.
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, dirname, resolve } from 'node:path'
 
@@ -31,6 +31,26 @@ const missing = []
 // them once quietly undid itself.
 const retired = map.retired ?? {}
 const dropped = new Set(retired.spriteFrames ?? [])
+
+// Not writing a file is not the same as it being gone. Anyone holding an older
+// checkout keeps every retired file they already have, because this tool only
+// ever adds. So the exact paths it would have written are removed by name —
+// never a sweep of the directory, which holds hand-drawn art and fetched fonts
+// that nothing here owns.
+let gone = 0
+const unwrite = (rel) => {
+  const p = join(OUT, rel)
+  if (!existsSync(p)) return
+  rmSync(p)
+  gone++
+}
+for (const name of dropped) unwrite(`art/${name}.svg`)
+for (const name of retired.fonts ?? []) unwrite(`fonts/${name}`)
+if (retired.crops) {
+  for (const crop of Object.keys(map.cropMasters)) {
+    for (const stage of map.cropStages) unwrite(`crops/${crop}/${stage}.svg`)
+  }
+}
 if (!retired.crops) {
   for (const [crop, id] of Object.entries(map.cropMasters)) {
     for (const stage of map.cropStages) {
@@ -87,5 +107,5 @@ for (const [name, file] of Object.entries(map.sounds)) {
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', src, '-ar', '22050', '-ac', '1', '-b:a', '64k', dest(`sfx/${name}`)])
   n++
 }
-console.log(`prepared ${n} assets -> game/public/assets`)
+console.log(`prepared ${n} assets -> game/public/assets${gone ? `, removed ${gone} retired` : ''}`)
 if (missing.length) { console.error(`MISSING ${missing.length}:`); missing.forEach(m => console.error('  ' + m)); process.exit(1) }

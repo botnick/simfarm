@@ -117,6 +117,52 @@ const watered = await farm('s.plots[0].tiles.filter(t => t.watered).length')
 eq('every tile is watered', watered, 12)
 eq('and the server counted the energy', (await serverState()).energy, await farm('s.energy'))
 
+/* ---------------------------- the screen must not confirm what was refused */
+// Whether a tool may be used is asked of the browser's own copy of the farm,
+// which is only ever what it last heard. The two can disagree — two quick
+// clicks, an answer still in flight — and then the check passes while the
+// server still says no. The tile used to ring and the sound used to play
+// regardless, which is the game reporting something that did not happen.
+//
+// The disagreement is arranged rather than raced for, so this either passes or
+// fails rather than doing it one time in ten. Nothing about the refusal is
+// faked: the field really is watered, and the server really does refuse.
+{
+  const before = await serverState()
+  eq('the field is watered as far as the server is concerned',
+    before.plots[0].tiles.filter(t => t.watered).length, 12)
+
+  await page.evaluate(() => {
+    // The browser is told the field is dry. The server knows better.
+    const f = window.__game.registry.get('farm')
+    f.state.plots[0].tiles.forEach(t => { t.watered = 0 })
+    window.__cues = []
+    const sm = window.__game.sound
+    if (!sm.__counted) {
+      sm.__counted = true
+      const real = sm.play.bind(sm)
+      sm.play = (key, opts) => { window.__cues.push(key); return real(key, opts) }
+    }
+  })
+  await click(239.5, 368, 300)                  // the water tool
+  await page.evaluate(() => { window.__cues.length = 0 })
+  await click(60, 223, 900)                     // the first tile
+
+  const after = await serverState()
+  eq('the server did not water it twice', after.plots[0].tiles.filter(t => t.watered).length, 12)
+  eq('and charged nothing for the refusal', after.energy, before.energy)
+  const cues = await page.evaluate(() => window.__cues.slice())
+  const waterCue = await page.evaluate(() => window.__game.registry.get('data').audio.toolCue.water)
+  ok('the watering sound did not play for a watering that did not happen',
+    !cues.includes(`sfx:${waterCue}`), JSON.stringify(cues))
+  // Saying nothing at all would be its own bug: silence is how a game looks
+  // broken. The refusal is announced, it is simply not announced as a success.
+  ok('and the refusal was announced instead', cues.includes('sfx:refused'), JSON.stringify(cues))
+  // Put the browser back on the server's version of events.
+  await page.evaluate(() => window.__game.registry.get('farm').sync())
+  await new Promise(r => setTimeout(r, 300))
+}
+
 await click(547, 364, 600)                                   // home
 const dayBefore = await farm('s.day')
 await click(522, 394, 900)                                   // END DAY
@@ -208,6 +254,10 @@ eq('the browser shows the server\'s week', board.week, fromServer.week)
 eq('and the server\'s orders', board.orders.map(o => o.cropId), fromServer.orders.map(o => o.cropId))
 
 const openIdx = board.orders.findIndex(o => o.filled < o.quota)
+// Everything worth knowing about delivering is inside this block, so a week
+// that arrived with every order already filled would have skipped the lot and
+// still come out green.
+ok('the week still has an order open', openIdx >= 0, JSON.stringify(board.orders))
 if (openIdx >= 0) {
   const order = board.orders[openIdx]
   const need = order.quota - order.filled

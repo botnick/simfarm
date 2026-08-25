@@ -68,7 +68,15 @@ export default class CoopScene extends Phaser.Scene {
   /** Feed every species that still wants feeding, in one go. */
   async feedEveryone() {
     const before = this.fedTotal()
-    for (const a of this.data_.animals) await this.farm.feed({ animalId: a.id })
+    // Leaving stops what has not been sent. The player asked to feed the flock
+    // and then walked away; spending the rest of their energy on a screen they
+    // are no longer looking at is not what they asked for. What already went is
+    // already the server's, and the next screen will show it.
+    for (const a of this.data_.animals) {
+      if (!this.scene.isActive()) return
+      await this.farm.feed({ animalId: a.id })
+    }
+    if (!this.scene.isActive()) return
     const fed = this.fedTotal() - before
     toast(this, WIDTH / 2, 120, fed ? t('coop.fedN', fed) : t('coop.nothingToFeed'), fed ? '#c8f5a8' : '#ffd6d6')
     if (fed) sfx(this, 'feed-animals')
@@ -80,6 +88,10 @@ export default class CoopScene extends Phaser.Scene {
   async feedOne(animal) {
     const before = this.fedTotal()
     await this.farm.feed({ animalId: animal.id })
+    // The player can leave while this is in flight. What the server accepted
+    // stands, but this screen is gone, and drawing on it is at best a lie about
+    // somewhere the player is not looking.
+    if (!this.scene.isActive()) return
     const n = this.fedTotal() - before
     toast(this, WIDTH / 2, 120, n ? t('coop.fedN', n) : t('coop.nothingToFeed'), n ? '#c8f5a8' : '#ffd6d6')
     if (n) { sfx(this, 'feed-animals'); sfx(this, `animal-${animal.id}`, { volume: 0.8 }) }
@@ -90,9 +102,11 @@ export default class CoopScene extends Phaser.Scene {
   async sellAll() {
     const before = takings(this.state)
     for (const a of this.data_.animals) {
+      if (!this.scene.isActive()) return
       const held = goodCount(this.state, a.produces)
       if (held) await this.farm.sellGood({ goodId: a.produces, count: held })
     }
+    if (!this.scene.isActive()) return
     const result = outcome(before, takings(this.state))
     const said = saidAs(result)
     if (said) {

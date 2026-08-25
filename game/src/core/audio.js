@@ -15,6 +15,10 @@ let muted = false
 let current = null            // { key, sound }
 
 export function installAudio(data) {
+  // Module state outlives a Phaser.Game. A game rebuilt in the same page used to
+  // start holding the dead game's bed, and every later decision about the music
+  // was made about a sound belonging to a scene that no longer exists.
+  current = null
   cfg = { volume: { sfx: 0.55, music: 0.22 }, sfx: [], music: {}, toolCue: {}, ...(data.audio ?? {}) }
   try { muted = localStorage.getItem(MUTE_KEY) === '1' } catch { muted = false }
 }
@@ -31,9 +35,11 @@ export const isMuted = () => muted
 export function setMuted(value, scene) {
   muted = !!value
   try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0') } catch { /* private mode */ }
-  if (!scene) return muted
+  // Silencing needs no scene, and returning early without doing it left the bed
+  // playing for anyone who muted before a scene was to hand.
   if (muted) current?.sound?.stop()
-  else if (current) playMusic(scene, current.key, { restart: true })
+  if (!scene) return muted
+  if (!muted && current) playMusic(scene, current.key, { restart: true })
   return muted
 }
 
@@ -67,6 +73,18 @@ export function playMusic(scene, place, { restart = false } = {}) {
 
   try {
     if (!current.sound || !current.sound.isPlaying) {
+      // Muting stops the bed without destroying it, so unmuting arrives here
+      // holding a stopped sound and used to leave it behind while adding a new
+      // one. The sound manager keeps every sound ever added, so each trip
+      // through the toggle left one more of them in it for the rest of the
+      // session.
+      if (current.sound) {
+        // The fade-in is a tween on the sound. Muting again before it finishes
+        // would leave it running against a destroyed object.
+        scene.tweens?.killTweensOf?.(current.sound)
+        current.sound.destroy()
+        current.sound = null
+      }
       const s = scene.sound.add(key, { loop: true, volume: 0 })
       s.play()
       // Fading in stops the loop from thumping in mid-phrase when a screen opens.

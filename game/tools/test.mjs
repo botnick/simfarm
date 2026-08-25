@@ -943,6 +943,9 @@ const fresh = (level = null) => {
   ok('a maximal random draw still picks real crops', orders.every(o => ids.includes(o.cropId)))
   eq('and still fills the board', orders.length, Math.min(data.rules.market.orderCount, ids.length))
   const zero = rollOrders(data, ids, () => 0)
+  // every() is true of an empty list, so say there is a board before saying
+  // what is on it.
+  ok('a minimal draw still fills the board', zero.length > 0, `${zero.length} orders`)
   ok('a minimal draw works too', zero.every(o => ids.includes(o.cropId)))
 }
 

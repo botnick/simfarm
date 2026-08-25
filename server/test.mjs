@@ -344,16 +344,99 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   eq('and a day with nothing done in it does not', quiet.status, 409)
   eq('and says so', quiet.body.error, 'nothing would change overnight')
 
-  // A recipe left curing does change overnight, with no clicks at all.
+  // A recipe left curing does change overnight, with no clicks at all — which
+  // is the one case the gate above must not refuse. This asserted `true` and
+  // tested nothing: the ingredients it describes reaching were never reached,
+  // so the day it claims to allow was never actually asked for.
   const c = await post('/session', {})
   const C = c.body.session
-  await post('/intent', { type: 'endDay' }, C)
-  const recipe = DATA.recipes.find(r => r.days > 0 && r.inputs.every(i => i.crop))
+
+  // There is no way in here to write state, and rightly so, so the farm is
+  // played up to a curing recipe the same way a player would: turnips on every
+  // field until the level opens the crop the recipe wants, sold to pay for its
+  // seed, then that crop grown and put in the pot.
+  // Whichever curing recipe is cheapest to reach: fewest ingredients, and the
+  // lowest level gate among them. Taking the first one in the book sent this
+  // after a recipe wanting a crop ten levels up, which no amount of turnips
+  // was going to open.
+  const levelOfCrop = (id) => DATA.crops.find(x => x.id === id)?.unlockLevel ?? 1
+  const recipe = DATA.recipes
+    .filter(r => r.days > 0 && r.inputs.length && r.inputs.every(i => i.crop))
+    .sort((a, b) => Math.max(...a.inputs.map(i => levelOfCrop(i.crop))) - Math.max(...b.inputs.map(i => levelOfCrop(i.crop)))
+      || a.inputs.length - b.inputs.length)[0]
+  ok('the rule book has a recipe that cures', !!recipe, DATA.recipes.map(r => `${r.id}:${r.days}`).join(' '))
+
+  const plots = DATA.rules.plots
+  const stateOf = async () => (await get('/state', C)).body.state
+  const sow = async (cropId, plot) => {
+    await post('/intent', { type: 'buySeed', cropId }, C)
+    const r = await post('/intent', { type: 'plant', plot, cropId }, C)
+    return r.status === 200
+  }
+  /** Water everything and end the day, until the fields are ready to pick. */
+  const growUntilRipe = async (limit = 12) => {
+    for (let day = 0; day < limit; day++) {
+      for (let p = 0; p < plots; p++) await post('/intent', { type: 'waterPlot', plot: p }, C)
+      await post('/intent', { type: 'endDay' }, C)
+      const st = await stateOf()
+      if (st.plots.some(p => p.tiles.some(t => t.stage === DATA.rules.stage.ripe))) return day + 1
+    }
+    return null
+  }
+
   if (recipe) {
-    const stock = {}
-    for (const i of recipe.inputs) stock[i.crop] = i.amount
-    // Reach the ingredients honestly: buy, sow, grow, pick.
-    ok('a curing recipe is the kind of thing that changes overnight', true)
+    const wantLevel = Math.max(...recipe.inputs.map(i => levelOfCrop(i.crop)))
+    const dearest = Math.max(...recipe.inputs.map(i => DATA.crops.find(x => x.id === i.crop)?.seedPrice ?? 0))
+
+    // Turnips are the crop a farm starts able to buy, so they are what pays for
+    // the level and the money the recipe needs.
+    let rounds = 0
+    while (rounds < 8) {
+      const st = await stateOf()
+      const level = st.level ?? 1
+      const paid = st.money >= dearest * recipe.inputs.length
+      if (level >= wantLevel && paid) break
+      let sown = 0
+      for (let p = 0; p < plots; p++) if (await sow('turnip', p)) sown++
+      if (!sown) break
+      if (await growUntilRipe() == null) break
+      for (let p = 0; p < plots; p++) await post('/intent', { type: 'harvestPlot', plot: p }, C)
+      const held = (await stateOf()).barn.crops.turnip ?? 0
+      if (held) await post('/intent', { type: 'sellCrop', cropId: 'turnip', count: held }, C)
+      for (let p = 0; p < plots; p++) await post('/intent', { type: 'clearPlot', plot: p }, C)
+      rounds++
+    }
+
+    const reached = await stateOf()
+    ok(`farming reached the level the recipe needs (${wantLevel})`, (reached.level ?? 1) >= wantLevel,
+      `level ${reached.level} money ${reached.money} after ${rounds} rounds`)
+
+    // Now the ingredient itself.
+    for (const inp of recipe.inputs) {
+      await sow(inp.crop, 0)
+      await growUntilRipe()
+      await post('/intent', { type: 'harvestPlot', plot: 0 }, C)
+      await post('/intent', { type: 'clearPlot', plot: 0 }, C)
+    }
+    const stocked = await stateOf()
+    ok('the ingredients are in the barn', recipe.inputs.every(i => (stocked.barn.crops[i.crop] ?? 0) >= i.amount),
+      JSON.stringify(stocked.barn.crops))
+
+    // Ask what the farm did, not what the request answered: a refused craft
+    // still comes back 200, so the status alone said nothing.
+    await post('/intent', { type: 'craft', recipeId: recipe.id }, C)
+    const curing = await stateOf()
+    ok('and is left curing', curing.pending.some(p => p.id === recipe.id), JSON.stringify(curing.pending))
+
+    // The point of all of it: nothing else has been done today, and the day is
+    // still allowed to end, because the pot changes overnight by itself.
+    const night = await post('/intent', { type: 'endDay' }, C)
+    eq('a day with only a curing pot in it still ends', night.status, 200)
+    const after = await stateOf()
+    const still = after.pending.find(p => p.id === recipe.id)
+    ok('and the pot moved on overnight',
+      still ? still.daysLeft < recipe.days : true,
+      `${recipe.days} -> ${still ? still.daysLeft : 'delivered'}`)
   }
 }
 
@@ -423,6 +506,86 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   ok('and does not describe the farm as it is now',
     replay.body.state.seeds[crop] !== moved.body.state.seeds[crop],
     `${replay.body.state.seeds[crop]} vs ${moved.body.state.seeds[crop]}`)
+
+  // A request id is a cache key, so it has to be something a cache can match on.
+  // An object is never equal to the one sent before, so it could never be a
+  // hit — while still taking a slot in a cache that is deliberately bounded.
+  // Enough of them and the retries that matter are pushed out of it.
+  for (const bad of [{}, [], '', 0, 42, null, 'x'.repeat(200)]) {
+    const r = await post('/intent', { type: 'buySeed', cropId: crop, requestId: bad }, A)
+    ok(`a request id of ${JSON.stringify(bad)?.slice(0, 12) ?? 'null'} is refused`, r.status === 400,
+      `got ${r.status}`)
+  }
+  // A fresh farm, because the one above has been spending its money.
+  {
+    const o = await post('/session', {})
+    const O = o.body.session
+    const was = await get('/state', O)
+    const r = await post('/intent', { type: 'buySeed', cropId: crop }, O)
+    eq('and leaving it out is still allowed, it simply is not idempotent', r.status, 200)
+    ok('the farm moved without one', (await get('/state', O)).body.revision > was.body.revision)
+  }
+
+  // An id says "this is the same ask as before". Answering a different ask with
+  // the old result reports a success for something that never happened.
+  {
+    const reuse = 'used-twice'
+    const before = await get('/state', A)
+    const bought = await post('/intent', { type: 'buySeed', cropId: crop, requestId: reuse }, A)
+    eq('an id is fine the first time', bought.status, 200)
+    const elsewhere = await post('/intent', { type: 'travel', requestId: reuse }, A)
+    eq('and reusing it for a different intent is refused, not answered', elsewhere.status, 409)
+
+    // The same ask written in a different order is the same ask. Sorting only
+    // the outermost keys would have refused a retry that was word for word
+    // identical as soon as an intent took a nested argument.
+    const same = await post('/intent', { requestId: reuse, cropId: crop, type: 'buySeed' }, A)
+    eq('the same ask with its keys in another order is a retry', same.status, 200)
+    eq('and answers what the first one answered', same.body.revision, bought.body.revision)
+    const after = await get('/state', A)
+    eq('so the farm was left exactly as the refusal implies', after.body.revision, bought.body.revision)
+    void before
+  }
+
+  // The revision is a number or it is nothing. Anything else is a client bug,
+  // and saying so beats quietly reading it as a mismatch.
+  // null keeps meaning 'not specified', as it always has.
+  {
+    const n = await post('/session', {})
+    const N = n.body.session
+    const r = await post('/intent', { type: 'buySeed', cropId: crop, expectedRevision: null }, N)
+    eq('a null expectedRevision still means it was not given', r.status, 200)
+  }
+  for (const bad of ['3', 1.5, {}, true]) {
+    const r = await post('/intent', { type: 'buySeed', cropId: crop, expectedRevision: bad }, A)
+    ok(`an expectedRevision of ${JSON.stringify(bad)} is refused`, r.status === 400, `got ${r.status}`)
+  }
+}
+
+/* ------------------------------ a retry must survive the pace it triggered */
+{
+  // The point of a request id is that a client whose response went missing can
+  // ask again and be told what happened. Pacing the session before looking in
+  // the cache took that away: the retry was answered "slow down", which is not
+  // an answer to the question, and no amount of asking again would become one.
+  const a = await post('/session', {})
+  const A2 = a.body.session
+  const crop2 = DATA.crops[0].id
+  const rid = 'lost-in-the-post'
+  const done = await post('/intent', { type: 'buySeed', cropId: crop2, requestId: rid }, A2)
+  eq('the intent was accepted', done.status, 200)
+
+  // Spend the session's ordinary budget on requests that are not replays.
+  let paced = 0
+  for (let i = 0; i < 400 && paced < 3; i++) {
+    const r = await post('/intent', { type: 'travel' }, A2)
+    if (r.status === 429) paced++
+  }
+  ok('the session can be paced at all', paced > 0, `${paced} refusals`)
+
+  const retry = await post('/intent', { type: 'buySeed', cropId: crop2, requestId: rid }, A2)
+  eq('and a retry of the accepted intent is still answered', retry.status, 200)
+  eq('with what it answered the first time', retry.body.revision, done.body.revision)
 }
 
 /* --------------------------------------- a configuration that will not do */

@@ -64,6 +64,10 @@ export default class MarketScene extends Phaser.Scene {
     if (!count) return
     const before = takings(this.state)
     await this.farm.sellCrop({ cropId, count })
+    // The player can leave while this is in flight. What the server accepted
+    // stands, but this screen is gone, and drawing on it is at best a lie about
+    // somewhere the player is not looking.
+    if (!this.scene.isActive()) return
     const result = outcome(before, takings(this.state))
     const said = saidAs(result)
     if (said) {

@@ -115,6 +115,7 @@ export default class WorkshopScene extends Phaser.Scene {
       const btn = button(this, WIDTH - 82, y + 26, 108, 28, recipe.days ? t('work.makeDays', recipe.days) : t('work.make'), async () => {
         const before = JSON.stringify(this.state.barn)
         await this.farm.craft({ recipeId: recipe.id })
+        if (!this.scene.isActive()) return
         if (JSON.stringify(this.state.barn) !== before) {
           sfx(this, 'craft-started')
           toast(this, WIDTH - 84, y + 6, recipe.days ? t('work.curingFor', recipe.days) : t('work.done'), '#ffe9a8')
