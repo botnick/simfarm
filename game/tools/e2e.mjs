@@ -34,6 +34,30 @@ const errors = []
 page.on('console', m => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push(m.text()) })
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`))
 
+/**
+ * Stop the moment the game throws.
+ *
+ * A scene whose create() throws is left half-built: Phaser has made some of it
+ * and none of the rest, and nothing on screen says so. Every assertion after
+ * that point is measuring rubble, so the run used to end in a cascade of
+ * failures with the actual cause reported last, if at all. Checking after each
+ * click turns that into one line naming the throw and where it happened.
+ */
+let faultsSeen = 0
+const stopIfBroken = (where) => {
+  const faults = errors.filter(e => e.startsWith('pageerror:'))
+  if (faults.length === faultsSeen) return
+  const fresh = faults.slice(faultsSeen)
+  faultsSeen = faults.length
+  console.error(`\n  FAIL  the game threw ${where ? `after ${where}` : ''}`)
+  for (const f of fresh) console.error(`        ${f}`)
+  console.error('        Everything after this would be measuring a half-built scene, so the run stops here.\n')
+  failures.push(`the game threw${where ? ` after ${where}` : ''}: ${fresh[0]}`)
+  console.log(`\n${pass} passed, ${failures.length} failed\n`)
+  failures.forEach(f => console.error(`  ${f}`))
+  process.exit(1)
+}
+
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
 const shot = (n) => page.screenshot({ path: `${SHOTS}/${n}.png` })
 
@@ -42,6 +66,7 @@ const click = async (gx, gy, settle = 300) => {
   const b = await page.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
   await page.mouse.click(b.x + (gx / W) * b.w, b.y + (gy / H) * b.h)
   await wait(settle)
+  stopIfBroken(`clicking ${gx},${gy}`)
 }
 const read = (expr) => page.evaluate(new Function(`
   const g = window.__game, s = g.registry.get('state'), d = g.registry.get('data');

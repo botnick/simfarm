@@ -140,14 +140,23 @@ export default class MarketScene extends Phaser.Scene {
       g.fillStyle(done ? 0xcfdcc0 : 0xe8d9b5, 1).fillRoundedRect(x, y, CARD_W, CARD_H, 9)
       g.fillStyle(done ? 0xdfe8d2 : 0xfffaf0, 1).fillRoundedRect(x, y, CARD_W, CARD_H - 4, 9)
       g.fillStyle(0xffffff, 0.55).fillRoundedRect(x + 7, y + 4, CARD_W - 14, 9, 4)
-      const card_ = [g, ...cropIcon(this, x + 26, y + 30, crop, 44)]
+      const card_ = [g, ...cropIcon(this, x + 27, y + 27, crop, 42)]
       this.parts.push(...card_)
 
+      // Two lines, not three, and using the whole width. Three left-aligned
+      // lines left the right half of the card empty and the whole thing leaning.
+      // The premium is what makes an order worth doing, so it sits opposite the
+      // name where the eye lands rather than buried between it and the price.
       const each = Math.round(crop.sellPrice * d.rules.market.orderMultiplier)
-      const said = [
-        label(this, x + 50, y + 17, tx(crop.name), { size: 12, display: true, color: C.ink }),
-        label(this, x + 50, y + 30, t('market.premium', d.rules.market.orderMultiplier), { size: 9, color: '#8a6b18' }),
-        label(this, x + 50, y + 43, t('market.each', money(each)), { size: 9, color: '#2d5a1e' })]
+      const premium = label(this, x + CARD_W - 10, y + 19, t('market.premium', d.rules.market.orderMultiplier),
+        { size: 9, display: true, color: '#8a6b18', origin: [1, 0.5] })
+      const name = label(this, x + 52, y + 19, tx(crop.name), { size: 13, display: true, color: C.ink })
+      // A long crop name gives way to the premium rather than running under it.
+      const room = (x + CARD_W - 14 - premium.displayWidth) - (x + 52)
+      if (name.displayWidth > room) name.setScale(name.scaleX * room / name.displayWidth)
+
+      const said = [name, premium,
+        label(this, x + 52, y + 35, t('market.each', money(each)), { size: 10, color: '#2d5a1e' })]
       this.parts.push(...said)
       card_.push(...said)
 

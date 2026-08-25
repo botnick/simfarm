@@ -88,3 +88,42 @@ installViewport(window.__game)
 
 // Exposed for tools/e2e.mjs so a test can ask the game what it expects to happen.
 window.__game.__rules = await import('./core/rules.js')
+
+/**
+ * The last resort, for when a screen dies on its way up.
+ *
+ * A scene whose create() throws is left half-built — Phaser has made some of it
+ * and none of the rest — and the game carries on drawing whatever did get made.
+ * That happened here once, and what the player saw was a farm that looked
+ * completely normal except that clicking a field did nothing at all, for ever,
+ * with no way to tell that anything was wrong.
+ *
+ * A game that is broken should look broken. This says so, and offers the one
+ * thing that reliably helps.
+ */
+{
+  const notice = document.createElement('div')
+  notice.style.cssText = [
+    'position:fixed', 'inset:auto 0 0 0', 'z-index:9999', 'display:none',
+    'padding:14px 18px', 'background:#8f2618', 'color:#fff6d8',
+    'font:14px/1.5 system-ui,sans-serif', 'text-align:center',
+    'box-shadow:0 -4px 16px #0006',
+  ].join(';')
+  document.body.appendChild(notice)
+
+  let shown = false
+  const broke = (detail) => {
+    if (shown) return              // one notice, not one per repeated frame error
+    shown = true
+    notice.textContent = `Something in the game went wrong and this screen may not work. Reloading usually fixes it. (${detail})`
+    const again = document.createElement('button')
+    again.textContent = 'Reload'
+    again.style.cssText = 'margin-left:12px;padding:4px 14px;border:0;border-radius:6px;cursor:pointer;font:inherit'
+    again.onclick = () => location.reload()
+    notice.appendChild(again)
+    notice.style.display = 'block'
+  }
+
+  window.addEventListener('error', (e) => broke(e.message || 'unknown error'))
+  window.addEventListener('unhandledrejection', (e) => broke(e.reason?.message ?? 'a request failed'))
+}
