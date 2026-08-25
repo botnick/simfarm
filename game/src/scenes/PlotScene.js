@@ -10,6 +10,8 @@ import { t, tx } from '../core/i18n.js'
 import { touchPad } from '../core/device.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx, toolSfx } from '../core/audio.js'
+import { whileHere } from '../ui/while-here.js'
+import { owned } from '../core/fatal.js'
 
 // Fields 1-2 and 3-4 use two different soil layouts in the original art.
 const FRAME_OF_PLOT = [20, 25, 30, 35]
@@ -52,7 +54,7 @@ export default class PlotScene extends Phaser.Scene {
 
     // Opening a screen is the moment to make sure what is drawn is what the
     // authority actually holds.
-    if (this.farm.online) this.farm.sync().then(() => this.refresh())
+    if (this.farm.online) whileHere(this, this.farm, () => this.refresh())
   }
 
   bindShortcuts() {
@@ -235,9 +237,9 @@ export default class PlotScene extends Phaser.Scene {
   }
 
   openSeedPicker() {
-    const owned = Object.entries(this.state.seeds).filter(([, n]) => n > 0)
+    const held = Object.entries(this.state.seeds).filter(([, n]) => n > 0)
     if (this.state.plots[this.plotIndex].cropId) { toast(this, WIDTH / 2, 200, t('why.sown')); return }
-    if (!owned.length) { toast(this, WIDTH / 2, 200, t('why.noSeeds'), '#ffd6d6'); return }
+    if (!held.length) { toast(this, WIDTH / 2, 200, t('why.noSeeds'), '#ffd6d6'); return }
 
     // Built from scene-level objects; `parts` is what closing it destroys.
     const parts = []
@@ -245,7 +247,7 @@ export default class PlotScene extends Phaser.Scene {
     const close = () => parts.forEach(o => o.destroy())
 
     // Paged rather than stretched: twelve seeds will not fit on a 420px stage.
-    const PER = 5, pages = Math.ceil(owned.length / PER)
+    const PER = 5, pages = Math.ceil(held.length / PER)
     let page = 0
 
     add(this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.6).setOrigin(0).setInteractive())
@@ -258,7 +260,7 @@ export default class PlotScene extends Phaser.Scene {
     const drawPage = () => {
       rowParts.forEach(o => o.destroy())
       rowParts = []
-      owned.slice(page * PER, page * PER + PER).forEach(([id, n], k) => {
+      held.slice(page * PER, page * PER + PER).forEach(([id, n], k) => {
         const crop = cropById(this.data_, id)
         const y = top + 68 + k * 38
         const g = this.add.graphics().setDepth(8001)
@@ -266,10 +268,16 @@ export default class PlotScene extends Phaser.Scene {
         g.fillStyle(0xfffaf0, 1).fillRoundedRect(left + 14, y - 15, W - 28, 30, 7)
         const zone = this.add.zone(left + 12, y - 17, W - 24, 34).setOrigin(0).setDepth(8002)
           .setInteractive({ useHandCursor: true })
-        zone.on('pointerup', async () => {
+        // Owned, and checked against the screen it belongs to. This is the one
+        // handler in the game that is a raw zone rather than a button, so it
+        // missed the wrapper every button gets — a throw here escaped the fatal
+        // boundary, and the close-and-refresh could run after the field had
+        // already been left.
+        zone.on('pointerup', owned(async () => {
           await this.farm.plant({ plot: this.plotIndex, cropId: id })
+          if (!this.scene.isActive()) return
           this.sfx('chime'); close(); this.refresh()
-        })
+        }, 'choosing a seed'))
         zone.on('pointerover', () => { g.clear(); g.fillStyle(C.green, 1).fillRoundedRect(left + 12, y - 17, W - 24, 34, 9); g.fillStyle(0xfffaf0, 1).fillRoundedRect(left + 14, y - 15, W - 28, 30, 7) })
         zone.on('pointerout', () => { g.clear(); g.fillStyle(C.rim, 0.9).fillRoundedRect(left + 12, y - 17, W - 24, 34, 9); g.fillStyle(0xfffaf0, 1).fillRoundedRect(left + 14, y - 15, W - 28, 30, 7) })
         const img = art(this, left + 38, y, `crop:${crop.art}:5`, 0.28).setDepth(8003)

@@ -12,6 +12,7 @@ import { t, tx } from '../core/i18n.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx } from '../core/audio.js'
 import { outcome, saidAs, takings } from '../ui/sale.js'
+import { whileHere } from '../ui/while-here.js'
 
 const PER_PAGE = 6      // two columns of three
 
@@ -54,7 +55,7 @@ export default class MarketScene extends Phaser.Scene {
     bindKeys(this, { Escape: () => this.scene.start('Shop') })
 
     this.render()
-    if (this.farm.online) this.farm.sync().then(() => this.render())
+    if (this.farm.online) whileHere(this, this.farm, () => this.render())
   }
 
   /** Sell as much of a crop as the barn holds, and say what it fetched. */

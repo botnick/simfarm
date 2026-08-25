@@ -41,7 +41,13 @@ export function saveSealed(envelope) {
   const incoming = envelope.save
   if (typeof incoming.revision !== 'number') return false
 
-  const held = read()?.sealed?.save
+  // Only a slot that actually holds a save counts as holding one. A blob with a
+  // farmId and a revision but no signature would win every comparison here and
+  // then be refused by the server on load — a slot that can never be written to
+  // and can never be opened, which nothing would ever heal.
+  const heldEnvelope = read()?.sealed
+  const usable = heldEnvelope?.save && typeof heldEnvelope.signature === 'string' && heldEnvelope.signature
+  const held = usable ? heldEnvelope.save : null
   // Only compare within one farm: a different farm is a different slot's worth
   // of history, and its revisions mean nothing here.
   //

@@ -24,10 +24,24 @@ window.Phaser = Phaser
 // Re-exported so the scenes can keep importing them from here.
 export { WIDTH, HEIGHT, RENDER_SCALE } from './core/size.js'
 
-// Set VITE_SERVER_URL (or localStorage 'simfarm.server') to play against the
-// authoritative server. Left unset, the same rules run in the browser, so the
-// game still works on its own.
-const SERVER_URL = import.meta.env?.VITE_SERVER_URL ?? localStorage.getItem('simfarm.server') ?? ''
+/**
+ * Where the authoritative server is, if there is one. Left unset, the same rules
+ * run in the browser and the game still works on its own.
+ *
+ * The slot is asked first and the build's own setting second, which is the
+ * opposite of what it was. Baked in and unoverridable, a built game is bound for
+ * ever to whatever address it was built with — and the address these are
+ * actually served on changes every time the tunnel restarts, so the deployed
+ * bundle would simply stop working with no way to point it anywhere else short
+ * of building it again. It also meant the built game could not be opened against
+ * a local server at all, so every suite here has only ever tested the source and
+ * never the artifact.
+ *
+ * Setting the slot is per-browser and gives nobody anything: the server decides
+ * what is true, so pointing a client at a different one only changes whose farm
+ * it is playing. An empty string in the slot is a deliberate "play offline".
+ */
+const SERVER_URL = localStorage.getItem('simfarm.server') ?? import.meta.env?.VITE_SERVER_URL ?? ''
 
 /**
  * What to do when the game breaks, before anything that could break runs.

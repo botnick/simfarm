@@ -45,10 +45,10 @@ server logs what it dropped.
 ## Checking a change
 
     npm test             # 412  the rules
-    npm run e2e          # 227  the game in a browser, offline
+    npm run e2e          # 229  the game in a browser, offline
     npm run online       #  70  the game in a browser, against a real server
-    npm run test:server  # 180  the server refusing what it should
-    npm run facade       #  59  what the browser does with every answer a server can give
+    npm run test:server  # 189  the server refusing what it should
+    npm run facade       #  63  what the browser does with every answer a server can give
     npm run reach        #  46  every crop, animal, recipe and reward is reachable,
                          #      and both languages say everything
     npm run play         #  16  a real game, played for weeks, by clicking only
@@ -112,6 +112,23 @@ perfectly well and breaks later, in somebody's night, with no way back.
 Run `pace` after touching `progression` or any `unlockLevel`. Content nobody can
 reach may as well not exist, and a quadratic curve is very easy to write in a way
 that quietly puts half the game behind a year of play.
+
+## Deploying
+
+    npm run build                      # dist/, served from the root of a domain
+    VITE_BASE=/simfarm/ npm run build  # or from a path under one
+
+The address of the server is baked in from `VITE_SERVER_URL`, but the browser's
+own `simfarm.server` slot is asked first — so a built game can be pointed
+somewhere else, or at nothing, without building it again. That matters more than
+it sounds: a tunnel gets a new address every time it restarts, and without it the
+deployed game would simply stop working with no way to reach it. Setting the slot
+to an empty string plays offline.
+
+Run the suites against the built bundle, not only the source:
+
+    npm run build && npx vite preview --port 4173
+    URL=http://localhost:4173/ npm run e2e
 
 ## Credit
 

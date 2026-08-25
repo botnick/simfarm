@@ -25,6 +25,15 @@ export default class MenuScene extends Phaser.Scene {
   constructor() { super('Menu') }
 
   create() {
+    // Phaser keeps one instance of a scene and shows it again, so everything
+    // this screen remembered last time is still here. The flag that stops a
+    // double tap opening two farms was left set by the successful one — so
+    // after a season ended and the player pressed PLAY AGAIN, NEW GAME did
+    // nothing at all, for ever. The game became unstartable by finishing it.
+    this.starting = false
+    // Which attempt is the current one. Anything still waiting on an answer
+    // from a menu that has since been left or restarted must not act on it.
+    this.attempt = (this.attempt ?? 0) + 1
     fitCamera(this)
     enter(this)
     playMusic(this, 'farm')
@@ -91,11 +100,13 @@ export default class MenuScene extends Phaser.Scene {
 
     // Locked together while a farm is being opened, and each put back the way it
     // was rather than simply switched on — LOAD is not always meant to be.
-    this.lockButtons = () => { newBtn.setEnabled(false); loadBtn.setEnabled(false) }
-    this.unlockButtons = () => { newBtn.setEnabled(true); loadBtn.setEnabled(canLoad) }
+    this.lockButtons = () => { newBtn.setEnabled(false); loadBtn.setEnabled(false); this.alsoLock?.setEnabled(false) }
+    this.unlockButtons = () => { newBtn.setEnabled(true); loadBtn.setEnabled(canLoad); this.alsoLock?.setEnabled(true) }
 
-    // Language toggle: the menu has no HUD to carry it.
-    button(this, 44, 26, 60, 24, t('lang.name'), () => { setLang(nextLang()); this.scene.restart() }, { tone: 'wood', size: 11 })
+    // Language toggle: the menu has no HUD to carry it. It restarts the scene,
+    // which is the last thing that should happen while a farm is being opened.
+    const langBtn = button(this, 44, 26, 60, 24, t('lang.name'), () => { setLang(nextLang()); this.scene.restart() }, { tone: 'wood', size: 11 })
+    this.alsoLock = langBtn
 
   }
 
@@ -129,6 +140,26 @@ export default class MenuScene extends Phaser.Scene {
     if (this.starting) return
     this.starting = true
     this.lockButtons?.()
+    // Everything below can wait on the network, and this screen can be left or
+    // restarted while it does. An answer that arrives for a menu nobody is
+    // looking at any more must not start a farm behind whatever replaced it.
+    const attempt = this.attempt
+    const stale = () => this.attempt !== attempt
+    // Opening a server client, building a farm and starting the next scene all
+    // sit outside the network call and can all throw. Any of them throwing used
+    // to leave the flag set and both buttons off, which is the same dead menu by
+    // another route.
+    try {
+      await this.open(state, sealed, stale)
+    } catch (err) {
+      this.starting = false
+      if (this.scene.isActive()) this.unlockButtons?.()
+      throw err
+    }
+  }
+
+  /** The farm-opening itself, wrapped by `begin` so nothing can strand the menu. */
+  async open(state, sealed, stale) {
     const data = this.registry.get('data')
 
     // A farm starts with none of the previous farm's history. These live on the
@@ -176,6 +207,7 @@ export default class MenuScene extends Phaser.Scene {
         giveUp('offline')
         return
       }
+      if (stale()) return
       if (!started?.session || !started?.state) {
         giveUp(started?.error ?? 'offline')
         return
@@ -204,6 +236,7 @@ export default class MenuScene extends Phaser.Scene {
       if (!state) { giveUp('offline'); return }
       this.registry.set('farm', createFarm({ data, state, onMilestones: (m) => this.registry.set('milestones', m) }))
     }
+    if (stale()) return
     // Kept for anything still reading the raw state directly.
     this.registry.set('state', state)
     this.scene.start('Farm')

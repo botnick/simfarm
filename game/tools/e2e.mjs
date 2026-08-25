@@ -123,6 +123,12 @@ const texts = () => page.evaluate(() => {
 })
 
 console.log(`\ne2e against ${URL}\n`)
+// This is the offline suite, so it says so rather than relying on there being
+// no server configured. A built bundle carries the address it was built with,
+// and running these against one would quietly test something else entirely —
+// which is how the artifact came to be the one thing never tested here.
+// Re-applied on every navigation, so it survives the reloads below.
+await page.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', ''))
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
 await page.evaluate(() => localStorage.clear())
 await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -1326,6 +1332,18 @@ await click(522, 394, 900)
 check('a capped season ends on its last day', await scene() === 'End')
 check('the final screen reports the takings', (await texts()).some(t => t.includes('4,242')))
 await shot('12-end')
+
+/* ------------------------------------------- and then playing it again */
+// Phaser keeps one instance of a scene and shows it again, so everything the
+// menu remembered last time is still there. The flag that stops a double tap
+// opening two farms was left set by the successful one, and PLAY AGAIN took the
+// player back to a menu whose buttons did nothing at all — the game became
+// unstartable by finishing it, which no test walked far enough to see.
+await click(300, 344, 900)                                  // PLAY AGAIN
+check('the end screen goes back to the menu', await scene() === 'Menu', await scene())
+await click(208, 284, 1200)                                 // NEW GAME
+check('and a season that ended can be played again', await scene() === 'Farm', await scene())
+await shot('13-again')
 
 await browser.close()
 check('no console errors anywhere in the run', errors.length === 0, [...new Set(errors)].join(' | '))

@@ -429,8 +429,23 @@ const server = createServer(async (req, res) => {
 
       const result = applyIntent(session, DATA, body)
       if (result.ok) {
+        // The durable part first, because it is the part that can fail. The
+        // ledger is what refuses a replayed save, and noting a revision the
+        // session does not go on to reach is the safe direction to be wrong in:
+        // it can only ever refuse an older save, never accept one. Doing it
+        // after the farm had already moved left a night that happened, a
+        // revision that had advanced, and a cooldown that had not started —
+        // so the next request could end a second day for free.
+        try {
+          store.noteRevision(session.farmId, session.revision + 1)
+        } catch (err) {
+          session.rng.restore(result.rngAt)
+          throw err
+        }
+        // Nothing above this line has changed the farm. Everything below is one
+        // step as far as anybody else is concerned.
+        session.state = result.state
         session.revision++
-        store.noteRevision(session.farmId, session.revision)
         // Both of these describe a night that happened, so they are written
         // after one did. Setting them before meant a night that failed still
         // started the cooldown and still cleared the marker saying the player
@@ -449,8 +464,14 @@ const server = createServer(async (req, res) => {
         session.outbox.push({ eventId: randomUUID(), milestoneId: id, day: session.state.day })
       }
 
+      // Named rather than spread. `applyIntent` hands back the farm it worked on
+      // and where the random source stood, and neither is the client's business:
+      // one is the raw farm including things `view` exists to keep in, and the
+      // other is a counter that must never leave this process.
       const response = {
-        ...result,
+        ok: result.ok,
+        ...(result.error ? { error: result.error } : {}),
+        ...(result.report ? { report: result.report } : {}),
         revision: session.revision,
         milestones: session.outbox,
         state: view(session, DATA),

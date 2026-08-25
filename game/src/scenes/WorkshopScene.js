@@ -10,6 +10,7 @@ import { setBackdrop } from '../ui/backdrop.js'
 import { t, tx } from '../core/i18n.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx } from '../core/audio.js'
+import { whileHere } from '../ui/while-here.js'
 
 const PER_PAGE = 4
 
@@ -45,7 +46,7 @@ export default class WorkshopScene extends Phaser.Scene {
 
     // Opening a screen is the moment to make sure what is drawn is what the
     // authority actually holds.
-    if (this.farm.online) this.farm.sync().then(() => this.render())
+    if (this.farm.online) whileHere(this, this.farm, () => this.render())
   }
 
   /** Describe a recipe's inputs the way a cook would read them. */

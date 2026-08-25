@@ -919,10 +919,60 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   // revision — the same farm, the same day, a different night.
   eq('and the random source is back where it started', session.rng.counter(), rngBefore)
 
-  // And the farm still works afterwards.
+  // And the farm still works afterwards. `applyIntent` hands the farm back
+  // rather than installing it — the caller writes the revision down somewhere
+  // durable first, and only then does the farm move — so this is what the
+  // server does with a good answer.
   const after = applyIntent(session, DATA, { type: 'endDay' })
   eq('a good night still runs on it', after.ok, true)
-  eq('and moves the calendar on one day', session.state.day, JSON.parse(before).day + 1)
+  eq('and the farm it hands back is not the one it was given',
+    after.state !== session.state, true)
+  eq('so nothing has moved until the caller says so', session.state.day, JSON.parse(before).day)
+  session.state = after.state
+  eq('and then the calendar has moved on one day', session.state.day, JSON.parse(before).day + 1)
+}
+
+/* --------------------------- a night nobody could write down did not happen */
+{
+  // Accepting an intent is two things: the farm changes, and the revision is
+  // written where a restart can still see it. The second is the one that can
+  // fail — a full ledger, a disk that will not take it — and it used to happen
+  // after the first. So a farm could advance, its revision with it, while the
+  // marks the night leaves behind did not: the cooldown never started and the
+  // "something was done today" flag stayed set, and the very next request could
+  // end a second day for nothing.
+  const { createStore } = await import('./sessions.mjs')
+  const { applyIntent } = await import('./intents.mjs')
+  const { memoryLedger } = await import('./ledger.mjs')
+
+  const ledger = memoryLedger({ maxFarms: 8 })
+  const store = createStore({ ledger })
+  const id = store.create(rules.newGame(DATA))
+  const session = store.get(id)
+  session.state.seeds[DATA.crops[0].id] = 2
+  rules.plant(session.state, DATA, 0, DATA.crops[0].id)
+
+  const dayBefore = session.state.day
+  const revisionBefore = session.revision
+  const rngBefore = session.rng.counter()
+
+  // The night itself is fine; writing it down is not.
+  const result = applyIntent(session, DATA, { type: 'endDay' })
+  eq('the night ran', result.ok, true)
+  eq('and handed a farm back', result.state.day, dayBefore + 1)
+  let threw = null
+  try {
+    store.noteRevision = () => { throw new Error('the ledger cannot be written to') }
+    store.noteRevision(session.farmId, session.revision + 1)
+  } catch (err) {
+    threw = err
+    session.rng.restore(result.rngAt)
+  }
+  ok('writing it down can fail', threw !== null)
+  eq('and then the farm has not moved', session.state.day, dayBefore)
+  eq('nor the revision', session.revision, revisionBefore)
+  eq('and the random source is back where it started', session.rng.counter(), rngBefore)
+  eq('so the night is still there to be had', rules.willAdvanceSimulation(session.state, DATA), true)
 }
 
 /* ------------------------------------------- a clock that went backwards */

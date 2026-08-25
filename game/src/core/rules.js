@@ -992,6 +992,70 @@ export function checkData(data) {
   }
   if (!Array.isArray(r.market?.tiers) || !r.market.tiers.length) {
     problems.push('the market has no price tiers, so nothing can be quoted')
+  } else {
+    // Every sale walks these. A tier without a multiplier hands back NaN, and
+    // NaN money spreads through the wallet, the barn and the save while every
+    // other check here stays green.
+    let last = 0
+    r.market.tiers.forEach((tier, i) => {
+      if (!Number.isFinite(tier?.multiplier) || tier.multiplier < 0) {
+        problems.push(`market tier ${i + 1} pays ${tier?.multiplier}, which is not a price`)
+      }
+      if (tier?.upTo == null) return
+      if (!Number.isSafeInteger(tier.upTo) || tier.upTo <= last) {
+        problems.push(`market tier ${i + 1} runs up to ${tier.upTo}, which is not past the tier before it`)
+      }
+      last = tier.upTo
+    })
+    if (r.market.tiers.at(-1)?.upTo != null) problems.push('the last market tier has to be the one with no ceiling')
+  }
+
+  // The numbers on the things themselves. Presence is not enough: a price that
+  // is a string, a chance above one or a count with a fraction in it all reach
+  // the player as something that looks like a bug in the game rather than in
+  // the file somebody edited.
+  const whole = (v) => Number.isSafeInteger(v) && v >= 0
+  const chance = (v) => Number.isFinite(v) && v >= 0 && v <= 1
+  const check = (list, id, field, value, test, what) => {
+    if (!test(value)) problems.push(`${list} "${id}" has ${field} ${value}, which is not ${what}`)
+  }
+  for (const c of data.crops ?? []) {
+    check('crop', c.id, 'a seed price', c.seedPrice, whole, 'a price')
+    check('crop', c.id, 'a sale price', c.sellPrice, whole, 'a price')
+    check('crop', c.id, 'days per stage', c.daysPerStage, (v) => whole(v) && v > 0, 'a number of days')
+    check('crop', c.id, 'harvests', c.harvests, (v) => whole(v) && v > 0, 'a number of pickings')
+    if (c.unlockLevel != null) check('crop', c.id, 'an unlock level', c.unlockLevel, (v) => whole(v) && v > 0, 'a level')
+    if (c.pest?.spawnChance != null) check('crop', c.id, 'a pest chance', c.pest.spawnChance, chance, 'a chance between none and certain')
+  }
+  for (const g of data.goods ?? []) check('good', g.id, 'a price', g.price, (v) => whole(v) && v > 0, 'a price worth selling for')
+  for (const it of data.supplies ?? []) {
+    check('supply', it.id, 'a price', it.price, whole, 'a price')
+    check('supply', it.id, 'an amount', it.amount, (v) => whole(v) && v > 0, 'an amount')
+  }
+  for (const a of data.animals ?? []) {
+    check('animal', a.id, 'a price', a.price, whole, 'a price')
+    check('animal', a.id, 'a maximum', a.max, (v) => whole(v) && v > 0, 'a number to keep')
+    check('animal', a.id, 'a starving chance', a.starveChance, chance, 'a chance between none and certain')
+    if (a.unlockLevel != null) check('animal', a.id, 'an unlock level', a.unlockLevel, (v) => whole(v) && v > 0, 'a level')
+  }
+  for (const tool of data.tools ?? []) check('tool', tool.id, 'an energy cost', tool.energy, whole, 'a cost')
+  for (const rec of data.recipes ?? []) {
+    check('recipe', rec.id, 'an energy cost', rec.energy, whole, 'a cost')
+    check('recipe', rec.id, 'a curing time', rec.days, whole, 'a number of days')
+    check('recipe', rec.id, 'an output amount', rec.output?.amount, (v) => whole(v) && v > 0, 'an amount')
+    for (const i of rec.inputs ?? []) {
+      const n = i.amount ?? i.anyCrop
+      if (!(whole(n) && n > 0)) problems.push(`recipe "${rec.id}" asks for ${n} of something, which is not an amount`)
+    }
+  }
+  if (!chance(r.pest?.spawnChance) || !chance(r.pest?.deathChance) || !chance(r.rain?.chance)) {
+    problems.push('a chance in the rule book is not between none and certain')
+  }
+  if (!chance(r.barn?.spoilRate)) problems.push('the spoil rate is not a share of the surplus')
+
+  // The lists themselves have to be lists, since everything above walks them.
+  for (const list of ['crops', 'goods', 'supplies', 'animals', 'tools', 'recipes', 'milestones']) {
+    if (data[list] != null && !Array.isArray(data[list])) problems.push(`${list} is not a list`)
   }
   for (const key of ['startMoney', 'startEnergy', 'startDay', 'travelEnergy', 'feedEnergy']) {
     if (!Number.isFinite(r[key])) problems.push(`rules.${key} is ${r[key]}, which is not a number`)

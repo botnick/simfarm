@@ -319,6 +319,21 @@ console.log('\nfarm facade\n')
   eq('a different farm is a different history', saveSealed(envelope(1, 'farm-b')), true)
   eq('and takes the slot', loadSealed().save.farmId, 'farm-b')
   eq('an envelope with no revision is not a save', saveSealed({ save: { farmId: 'x' }, signature: 's' }), false)
+
+  // A slot holding something that is not a save at all must not be allowed to
+  // win the comparison. A blob with a farm id and a very high revision but no
+  // signature would refuse every real envelope offered to it, and be refused by
+  // the server on load — a slot that can neither be written to nor opened, and
+  // nothing would ever heal it.
+  clear()
+  localStorage.setItem('simfarm', JSON.stringify({ v: 2, sealed: { save: { farmId: 'farm-a', revision: 999, state: {} } } }))
+  eq('a slot holding an unsigned blob is written over', saveSealed(envelope(1)), true)
+  eq('and holds a real save afterwards', loadSealed().save.revision, 1)
+  eq('and one with a signature that is not a string', (() => {
+    localStorage.setItem('simfarm', JSON.stringify({ v: 2, sealed: { save: { farmId: 'farm-a', revision: 999 }, signature: 42 } }))
+    return saveSealed(envelope(2))
+  })(), true)
+  eq('is written over too', loadSealed().save.revision, 2)
   clear()
 }
 

@@ -107,8 +107,17 @@ export function applyIntent(session, data, intent) {
     session.rng.restore(rngAt)
     return result
   }
-  session.state = working
-  return result
+  // Handed back rather than installed. Accepting an intent is not only a matter
+  // of the farm changing: the revision has to be written where a restart can
+  // still see it, and that write can fail. Committing here left the caller with
+  // a farm already advanced and no way to take it back, so the farm, the
+  // revision and the marks left by the night are all installed together, by the
+  // caller, once the part that can fail has not.
+  // A number, not a closure. The accepted response is copied into the retry
+  // cache, and a copy is made with `structuredClone` — which cannot clone a
+  // function and throws rather than skipping it, so a rewind handed back this
+  // way turned every accepted intent into a fault.
+  return { ...result, state: working, rngAt }
 }
 
 /**

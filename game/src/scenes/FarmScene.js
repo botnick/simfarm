@@ -11,6 +11,7 @@ import { setBackdrop } from '../ui/backdrop.js'
 import { t, tx } from '../core/i18n.js'
 import { isTouch } from '../core/device.js'
 import { bindKeys } from '../core/keys.js'
+import { whileHere } from '../ui/while-here.js'
 
 /**
  * The farm as the original drew it. The house becomes the workshop, the road
@@ -70,7 +71,7 @@ export default class FarmScene extends Phaser.Scene {
 
     // Opening a screen is the moment to make sure what is drawn is what the
     // authority actually holds.
-    if (this.farm.online) this.farm.sync().then(() => this.refresh())
+    if (this.farm.online) whileHere(this, this.farm, () => this.refresh())
   }
 
   /**
