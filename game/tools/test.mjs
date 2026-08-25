@@ -2,7 +2,7 @@
 // later refactor cannot quietly change how the farm works.
 import { readFileSync } from 'node:fs'
 import {
-  newGame, plant, applyTool, canApply, endDay, harvestPlot, waterPlot,
+  newGame, plant, applyTool, canApply, endDay, harvestPlot, waterPlot, clearPlot,
   buySeed, buySupply, buyAnimal, feedAnimals, craft, recipeReady,
   cropById, cropCount, goodCount, sellCrop, sellGood, byId, travel,
   levelOf, availableCrops, unitPrice, quoteCrop, takeMilestones, countOf, indexOf,
@@ -131,6 +131,38 @@ const fresh = (level = null) => {
   s.plots[0].tiles.forEach(t => t.stage = R.stage.ripe)
   ok('a field with no crop cannot be picked', !canApply(s, data, 0, 0, 'harvest'))
   eq('and pick-all takes nothing from it', harvestPlot(s, data, 0), 0)
+}
+
+{
+  // Withered ground: the state that takes a field out of the game entirely.
+  // A plot keeps its crop until every tile is bare, and it cannot be sown while
+  // it holds one, so a field killed overnight is dead land until it is cleared.
+  const s = fresh(); buySeed(s, data, 'turnip'); plant(s, data, 0, 'turnip')
+  s.plots[0].tiles.forEach(t => { t.stage = R.stage.dead })
+  s.energy = 100
+  ok('a withered field cannot be sown', !plant(s, data, 0, 'turnip'))
+  eq('clear-all takes every withered tile', clearPlot(s, data, 0), 12)
+  eq('and the field goes back on the market', s.plots[0].cropId, null)
+  buySeed(s, data, 'turnip')
+  ok('a cleared field can be sown again', plant(s, data, 0, 'turnip'))
+
+  // The safety that makes it fit to put on a button: one tile at a time, clear
+  // will happily destroy a ripe crop, and the whole-field version must not.
+  const r = fresh(); buySeed(r, data, 'turnip'); plant(r, data, 0, 'turnip')
+  r.energy = 100
+  r.plots[0].tiles.forEach((t, i) => { t.stage = i < 4 ? R.stage.dead : R.stage.ripe })
+  eq('clear-all takes only the withered tiles', clearPlot(r, data, 0), 4)
+  eq('and leaves every ripe one standing', r.plots[0].tiles.filter(t => t.stage === R.stage.ripe).length, 8)
+  eq('so the crop is still there to pick', harvestPlot(r, data, 0), 8)
+
+  // Clearing costs energy like every other action, so a tired farmer clears
+  // what they can and comes back tomorrow rather than being refused outright.
+  const e = fresh(); buySeed(e, data, 'turnip'); plant(e, data, 0, 'turnip')
+  e.plots[0].tiles.forEach(t => { t.stage = R.stage.dead })
+  e.energy = 3
+  eq('a tired farmer clears what the energy allows', clearPlot(e, data, 0), 3)
+  eq('and stops when it runs out', e.energy, 0)
+  eq('nothing at all happens with no energy left', clearPlot(e, data, 0), 0)
 }
 
 {

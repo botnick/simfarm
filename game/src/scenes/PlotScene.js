@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { C, art, button, fitCamera, label, money, panel, title, toast } from '../ui/kit.js'
 import { WIDTH, HEIGHT } from '../main.js'
 import { enter, pop, ripple } from '../ui/fx.js'
-import { byId, canApply, cropById, cropCount } from '../core/rules.js'
+import { byId, canApply, cropById, cropCount, toolById } from '../core/rules.js'
 import { backdrop, centreOf, diamondZone, regionByRole, regions } from '../ui/stage.js'
 import { makeHud } from '../ui/hud.js'
 import { setBackdrop } from '../ui/backdrop.js'
@@ -60,6 +60,7 @@ export default class PlotScene extends Phaser.Scene {
       Escape: () => this.scene.start('Farm'),
       w: () => this.waterAll.enabled && this.waterAll.objects[2].emit('pointerup'),
       p: () => this.pickAll.enabled && this.pickAll.objects[2].emit('pointerup'),
+      c: () => this.clearAll.enabled && this.clearAll.objects[2].emit('pointerup'),
       s: () => this.openSeedPicker(),
     }
     // Tools take the number keys in the order the data lists them.
@@ -135,32 +136,49 @@ export default class PlotScene extends Phaser.Scene {
     this.plantHint = label(this, PLANT.x + 4, PLANT.y - 34, '', { size: 9, bold: true, color: '#ffe27a', origin: [0.5, 0.5] })
       .setDepth(302).setStroke('#000000cc', 4)
 
-    // The whole-field shortcuts are ours: 48 tiles is a lot of clicking.
+    // The whole-field shortcuts are ours: 48 tiles is a lot of clicking. Three
+    // of them now, laid out as one row between the wallet on the left and the
+    // energy heart on the right — there is no room for a fourth.
     // The plants are drawn from the foot up and sorted by row, so a tall crop
     // in the back row reaches into this strip. The whole-field controls and the
     // note beside them sit above every plant, or a chilli field hides its own
     // PICK ALL button.
     const TOP_BAR = 700
-    this.waterAll = button(this, 272, 14, 112, 21, t('plot.waterAll'), async () => {
+    this.waterAll = button(this, 352, 14, 96, 21, t('plot.waterAll'), async () => {
       const before = this.wateredCount()
       await this.farm.waterPlot({ plot: this.plotIndex })
       const n = this.wateredCount() - before
-      toast(this, 272, 38, n ? t('plot.watered', n) : t('plot.nothingToWater'), n ? '#dff1ff' : '#ffd6d6')
+      toast(this, 352, 38, n ? t('plot.watered', n) : t('plot.nothingToWater'), n ? '#dff1ff' : '#ffd6d6')
       if (n) this.sfx('pop')
       this.refresh()
     }, { tone: 'blue', size: 10 })
-    this.pickAll = button(this, 392, 14, 104, 21, t('plot.pickAll'), async () => {
+    this.pickAll = button(this, 456, 14, 96, 21, t('plot.pickAll'), async () => {
       const before = this.barnCount()
       await this.farm.harvestPlot({ plot: this.plotIndex })
       const n = this.barnCount() - before
-      toast(this, 392, 38, n ? t('plot.picked', n) : t('plot.nothingRipe'), n ? '#ffe9a8' : '#ffd6d6')
+      toast(this, 456, 38, n ? t('plot.picked', n) : t('plot.nothingRipe'), n ? '#ffe9a8' : '#ffd6d6')
       if (n) this.sfx('chime')
       this.refresh()
     }, { tone: 'gold', size: 10 })
+    // Clearing is the only way to get withered ground back, and a field cannot
+    // be sown again while a single dead plant stands in it. One bad night kills
+    // twelve tiles, so without this the answer is twelve clicks — or, far more
+    // likely, a field abandoned because nothing explains why it will not sow.
+    // Dead tiles only: `clear` on a ripe one is a legitimate choice to make
+    // deliberately and a catastrophe to hand to a button.
+    this.clearAll = button(this, 248, 14, 96, 21, t('plot.clearAll'), async () => {
+      const before = this.deadCount()
+      await this.farm.clearPlot({ plot: this.plotIndex })
+      const n = before - this.deadCount()
+      toast(this, 248, 38, n ? t('plot.cleared', n) : t('plot.nothingDead'), n ? '#d8ffd0' : '#ffd6d6')
+      if (n) this.sfx('pop')
+      this.refresh()
+    }, { tone: 'red', size: 10 })
     this.fieldNote = label(this, 505, 42, '', { size: 10, color: '#ffffff', origin: [1, 0.5] })
       .setDepth(TOP_BAR + 1).setStroke('#000000aa', 4)
     this.waterAll.setDepth(TOP_BAR)
     this.pickAll.setDepth(TOP_BAR)
+    this.clearAll.setDepth(TOP_BAR)
   }
 
   /* --------------------------------------------------------------- action */
@@ -168,6 +186,7 @@ export default class PlotScene extends Phaser.Scene {
   /** Counts the screen compares before and after an action, since the authority
    *  reports what happened by changing the farm rather than returning a number. */
   wateredCount() { return this.state.plots[this.plotIndex].tiles.filter(t => t.watered).length }
+  deadCount() { return this.state.plots[this.plotIndex].tiles.filter(t => t.stage === this.data_.rules.stage.dead).length }
   barnCount() {
     const id = this.state.plots[this.plotIndex].cropId
     return id ? cropCount(this.state, id) : 0
@@ -336,11 +355,27 @@ export default class PlotScene extends Phaser.Scene {
 
     const ripe = plot.tiles.filter(x => x.stage === r.stage.ripe).length
     const dry = crop ? plot.tiles.filter(x => x.stage < r.stage.dead && !x.watered).length : 0
-    this.waterAll.setEnabled(dry > 0 && s.energy > 0)
-    this.pickAll.setEnabled(ripe > 0 && s.energy > 0)
+    const dead = plot.tiles.filter(x => x.stage === r.stage.dead).length
+    const living = plot.tiles.filter(x => x.stage !== r.stage.dead && x.stage !== r.stage.empty).length
+    // What the action costs, not merely whether there is any energy left. Every
+    // tool costs one today, so asking the tool rather than assuming it is the
+    // difference between this staying correct and a button that lights up and
+    // does nothing the day somebody prices a tool at two.
+    const affords = (id) => s.energy >= (toolById(this.data_, id)?.energy ?? 1)
+    this.waterAll.setEnabled(dry > 0 && affords('water'))
+    this.pickAll.setEnabled(ripe > 0 && affords('harvest'))
+    this.clearAll.setEnabled(dead > 0 && affords('clear'))
     this.plantHint?.setText(crop ? '' : t('plot.sow'))
-    this.fieldNote.setText(crop
-      ? `${tx(crop.name)}  ·  ${t('plot.inBarn', cropCount(s, plot.cropId))}`
-      : t('plot.emptyField'))
+    // Withered ground is the one state that stops the field being used at all,
+    // so it is what the note says while any of it is left. Clearing is only the
+    // whole answer when there is nothing else alive in the field: with a crop
+    // still standing, the bare patches stay unusable until it finishes, and
+    // telling the player to clear before sowing would be a promise the field
+    // cannot keep.
+    this.fieldNote.setText(dead
+      ? (living ? t('plot.deadMixed', dead) : t('plot.deadNote', dead))
+      : crop
+        ? `${tx(crop.name)}  ·  ${t('plot.inBarn', cropCount(s, plot.cropId))}`
+        : t('plot.emptyField'))
   }
 }

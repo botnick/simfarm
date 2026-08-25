@@ -228,7 +228,6 @@ export default class FarmScene extends Phaser.Scene {
     // reads as a false alarm here, a refusal toast landing next to the new
     // morning. Ignore the press instead.
     if (this.farm.busy) return
-    const levelBefore = this.hud.level
     const report = await this.farm.endDay()
     if (report?.refused) {
       sfx(this, 'refused')
@@ -255,17 +254,23 @@ export default class FarmScene extends Phaser.Scene {
     for (const [id, n] of Object.entries(report.lost)) {
       news.push(t('news.lost', n, tx(this.data_.animals.find(a => a.id === id)?.name ?? id)))
     }
+    // Crops rotting in an overfull barn is a real loss, and the night used to
+    // take them without a word. The rules have reported it all along; nothing
+    // read it.
+    for (const [id, n] of Object.entries(report.spoiled ?? {})) {
+      if (n) news.push(t('news.spoiled', n, tx(cropById(this.data_, id)?.name ?? id)))
+    }
+    // A farm that had nothing left was lent a seed. It shows in the status
+    // panel afterwards, but the night it happened should say so.
+    if (report.rescued) news.push(t('news.rescued'))
+    // The board is what an endless game is driven by, so its turning over is
+    // news — and it is the moment to go and look at what is wanted.
+    if (report.newWeek) news.push(t('news.newWeek'))
+
     toast(this, WIDTH / 2, 330, news.length ? news.join('  ·  ') : t('farm.quietNight'), news.length ? '#ffe9a8' : '#ffffff')
 
     this.rainLayer.removeAll(true)
     this.refresh()
-
-    // Levelling is the one moment the game congratulates the player, so it gets
-    // a banner rather than another line in the night's news.
-    if (this.hud.level > levelBefore) {
-      sfx(this, 'level-up')
-      banner(this, t('farm.levelUp', this.hud.level))
-    }
 
     // A season closing is the only scoreboard an endless game has, and until now
     // the rules produced it every twenty-eight days and nobody was ever told.

@@ -21,6 +21,7 @@ const HANDLERS = {
   },
   waterPlot: (s, d, a) => int(a.plot) != null && rules.waterPlot(s, d, a.plot) > 0,
   harvestPlot: (s, d, a) => int(a.plot) != null && rules.harvestPlot(s, d, a.plot) > 0,
+  clearPlot: (s, d, a) => int(a.plot) != null && rules.clearPlot(s, d, a.plot) > 0,
   buySeed: (s, d, a) => typeof a.cropId === 'string' && rules.buySeed(s, d, a.cropId),
   buySupply: (s, d, a) => typeof a.supplyId === 'string' && rules.buySupply(s, d, a.supplyId),
   buyAnimal: (s, d, a) => typeof a.animalId === 'string' && rules.buyAnimal(s, d, a.animalId),

@@ -176,6 +176,43 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   }
   ok('a crop really does ripen through the server', ripe)
 
+  // Withered ground has to be recoverable through the authority too, or the
+  // browser button is a lie. This is not a rare accident: a crop that gives
+  // more than one picking leaves the whole field dead once it is spent, and a
+  // field cannot be sown while a single dead plant stands in it. So finishing a
+  // radish field and finding it unusable is the ordinary path, not the unlucky
+  // one, and the whole of that round trip is tested here.
+  {
+    const w = await post('/session', {})
+    const W = w.body.session
+    await post('/intent', { type: 'buySeed', cropId: 'radish' }, W)
+    await post('/intent', { type: 'plant', plot: 0, cropId: 'radish' }, W)
+    // Energy runs out before the field does, so the tiles are picked out over
+    // several days rather than all at once. Keep at it until the last one is
+    // spent, which is the state the player is actually left holding.
+    let spent = false
+    for (let day = 0; day < 40 && !spent; day++) {
+      await post('/intent', { type: 'waterPlot', plot: 0 }, W)
+      await post('/intent', { type: 'harvestPlot', plot: 0 }, W)
+      const after = await post('/intent', { type: 'endDay' }, W)
+      spent = after.body.state.plots[0].tiles.every(t => t.stage === DATA.rules.stage.dead)
+    }
+    ok('a crop that is picked out leaves the whole field withered', spent)
+
+    await post('/intent', { type: 'buySeed', cropId: 'radish' }, W)
+    const refused = await post('/intent', { type: 'plant', plot: 0, cropId: 'radish' }, W)
+    eq('the server refuses to sow withered ground', refused.body.ok, false)
+
+    const cleared = await post('/intent', { type: 'clearPlot', plot: 0 }, W)
+    eq('the server clears the whole field in one call', cleared.body.ok, true)
+    ok('and nothing withered is left standing',
+      !cleared.body.state.plots[0].tiles.some(t => t.stage === DATA.rules.stage.dead))
+    const sown = await post('/intent', { type: 'plant', plot: 0, cropId: 'radish' }, W)
+    eq('so the field can be sown again', sown.body.ok, true)
+    eq('clearing a field with nothing withered in it is refused',
+      (await post('/intent', { type: 'clearPlot', plot: 2 }, W)).body.ok, false)
+  }
+
   const picked = await post('/intent', { type: 'tool', plot: 0, tile: 0, toolId: 'harvest' }, M)
   const entry = picked.body.milestones.find(x => x.milestoneId === 'first-harvest')
   ok('the first harvest reports its milestone', !!entry)

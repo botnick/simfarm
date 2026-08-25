@@ -95,6 +95,22 @@ const appears = async (re, ms = 6000) => {
   }
   return { found: false, texts: last }
 }
+/**
+ * Wait until nothing is left to say.
+ *
+ * Banners queue and each one holds the screen for several seconds, so "has it
+ * stopped being shown" cannot be answered by waiting a fixed moment — one extra
+ * congratulation earlier in the run pushes everything after it later.
+ */
+const settled = async (ms = 30000) => {
+  const until = Date.now() + ms
+  while (Date.now() < until) {
+    if (!(await page.evaluate(() => (window.__game.registry.get('pendingBanners') ?? []).length))) return true
+    await wait(250)
+  }
+  return false
+}
+
 // Every visible string in the running scene, for checking what the player reads.
 const texts = () => page.evaluate(() => {
   const g = window.__game
@@ -233,7 +249,7 @@ eq('the seed leaves the bag', await read(`s.seeds['${firstCrop.id}']`), 0)
 
 /* -------------------------------------------------------------- watering */
 const energyBeforeWater = await read('s.energy')
-await click(278, 13, 500)                                   // WATER ALL
+await click(352, 13, 500)                                   // WATER ALL
 const watered = await read('s.plots[0].tiles.filter(t => t.watered).length')
 eq('water-all waters every tile', watered, rules.tilesPerPlot)
 eq('watering costs one energy per tile', await read('s.energy'), energyBeforeWater - rules.tilesPerPlot)
@@ -340,9 +356,59 @@ check('and a grown farm gets back more than a new one would',
 await poke(`s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.ripe })`)
 await click(158, 263, 500)                                  // back into the field
 const barnBefore = await read(`(s.barn.crops['${firstCrop.id}'] || 0)`)
-await click(402, 13, 600)                                   // PICK ALL
+await click(456, 13, 600)                                   // PICK ALL
 eq('pick-all fills the barn', await read(`s.barn.crops['${firstCrop.id}']`), barnBefore + rules.tilesPerPlot)
 await shot('06-picked')
+
+/* --------------------------------------------------------- withered ground */
+// The state that used to take a field out of the game for good. A crop that
+// gives more than one picking leaves every tile dead once it is spent, and a
+// field cannot be sown while a single dead plant stands in it — so the ordinary
+// end of a radish field was a quarter of the farm that would not sow, with
+// nothing on screen saying why and no way back but twelve separate clicks.
+{
+  await poke(`
+    s.energy = 100
+    s.plots[0].cropId = '${firstCrop.id}'
+    s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.dead; t.pest = 0 })
+  `)
+  await click(547, 364, 400)                                  // out to the farm
+  await click(158, 263, 600)                                  // and back in, to redraw
+  eq('the withered field opens', await scene(), 'Plot')
+  const sowable = await read(`g.__rules.plant(JSON.parse(JSON.stringify(s)), d, 0, '${firstCrop.id}')`)
+  check('withered ground cannot be sown', sowable === false, String(sowable))
+  check('and the screen says so rather than leaving it a mystery',
+    (await texts()).some(x => /withered|ตาย/i.test(x)), JSON.stringify(await texts()))
+  await shot('06b-withered')
+
+  // A field with dead patches and a crop still growing in it is a different
+  // answer: clearing the dead ground is allowed but does not make the field
+  // sowable, because the survivors have to finish first. Saying "clear before
+  // sowing" here would be telling the player something the field cannot do.
+  await poke(`s.plots[0].tiles.forEach((t, i) => { t.stage = i < 3 ? d.rules.stage.dead : d.rules.stage.seed })`)
+  await click(547, 364, 400)
+  await click(158, 263, 600)
+  const mixed = await texts()
+  check('a half-dead field does not promise that clearing is enough',
+    mixed.some(x => /must finish first|รอที่เหลือ/i.test(x)) &&
+    !mixed.some(x => /clear before sowing|ต้องถางก่อน/i.test(x)), JSON.stringify(mixed))
+  await click(248, 13, 900)                                   // CLEAR DEAD
+  eq('clearing takes the withered patches', await read('s.plots[0].tiles.filter(t => t.stage === d.rules.stage.dead).length'), 0)
+  eq('and leaves the crop that is still growing', await read(`s.plots[0].tiles.filter(t => t.stage === d.rules.stage.seed).length`), 9)
+  eq('so the field is still spoken for', await read('s.plots[0].cropId'), firstCrop.id)
+  const stillSown = await read(`g.__rules.plant(JSON.parse(JSON.stringify(s)), d, 0, '${firstCrop.id}')`)
+  check('and cannot be sown over', stillSown === false, String(stillSown))
+
+  // Now finish the job the way the player would have to.
+  await poke(`s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.dead })`)
+  await click(547, 364, 400)
+  await click(158, 263, 600)
+  await click(248, 13, 900)                                   // CLEAR DEAD
+  eq('clearing takes every withered tile',
+    await read('s.plots[0].tiles.filter(t => t.stage === d.rules.stage.dead).length'), 0)
+  eq('and the field goes back on the market', await read('s.plots[0].cropId'), null)
+  await shot('06c-cleared')
+}
 
 /* ---------------------------------------------------------------- selling */
 await click(547, 364, 400)
@@ -794,6 +860,42 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
   check('and the plaque shows the new level',
     (await texts()).includes(String(levelAfter)), JSON.stringify(await texts()))
 
+  /* --------------------------------------- levelling away from the farm */
+  // Picking a crop, starting a batch and filling an order all pay experience,
+  // so a level can be reached in a field, the workshop, the shop or the market.
+  // The only congratulation used to be the farm's end-of-day comparison, which
+  // meant levelling anywhere else went by with nothing but a number quietly
+  // changing on a plaque that most screens do not even have.
+  {
+    const target = await read(`(() => {
+      const listed = (d.milestones ?? []).filter(m => m.when === 'level').map(m => m.level)
+      const every = d.progression.milestoneEvery ?? 0
+      const top = Math.max(0, ...listed)
+      const now = g.__progression.levelProgress(s.xp, d).level
+      for (let l = now + 1; l < now + 60; l++)
+        if (!listed.includes(l) && !(every > 0 && l > top && l % every === 0)) return l
+      return null
+    })()`)
+    check('some level arrives with no milestone to announce it', target != null, `level ${target}`)
+    await poke(`
+      s.xp = 0
+      while (g.__progression.levelProgress(s.xp, d).level < ${target}) s.xp += 1
+      s.xp -= 1
+      s.energy = 100
+      s.plots[0].cropId = '${firstCrop.id}'
+      s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.ripe; t.pest = 0 })
+    `)
+    await click(158, 263, 500)
+    eq('a field is open, and the farm screen is not', await scene(), 'Plot')
+    await click(456, 13, 700)                                 // PICK ALL — the experience lands here
+    eq('picking the field is what levels the farm up',
+      await read(`g.__progression.levelProgress(s.xp, d).level`), target)
+    const said = await appears(/LEVEL \d+!|เลเวล \d+!/)
+    check('and the field is where it is announced', said.found, JSON.stringify(said.texts))
+    await click(547, 364, 400)                                // back out to the farm
+    eq('and the farm is where we came back to', await scene(), 'Farm')
+  }
+
   // A level unlocks crops, and the shop is where that shows.
   const unlocked = await read('d.crops.filter(c => (c.unlockLevel ?? 1) <= 12).length')
   check('levelling unlocks more crops than the farm started with', unlocked > 3, `${unlocked} crops`)
@@ -826,7 +928,7 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
   check('and says which one', named.found, `looking for ${unseen.name} in ${JSON.stringify(named.texts)}`)
 
   // And only once, however many screens the player walks through.
-  await wait(1800)
+  check('the congratulation finishes on its own', await settled(), 'a banner is stuck on screen')
   await page.keyboard.press('KeyC'); await wait(800)
   await page.keyboard.press('Escape'); await wait(800)
   const again = await texts()
@@ -939,6 +1041,42 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
     await page.keyboard.press('Escape')
     await wait(600)
   }
+}
+
+/* ------------------------------- the night says what it actually did */
+{
+  // The rules report thirteen things about a night and the farm used to read
+  // eight of them. Crops rotting in an overfull barn is a real loss and it was
+  // taken without a word.
+  for (let i = 0; i < 4 && await scene() !== 'Farm'; i++) { await page.keyboard.press('Escape'); await wait(500) }
+
+  const cap = await read('g.__rules.farmLimits(s, d).barnSoftCap')
+  await poke(`
+    s.energy = 100
+    s.barn.crops['${firstCrop.id}'] = ${cap} + 40
+    s.plots[0].cropId = '${firstCrop.id}'
+    s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.seed; t.watered = 1 })
+  `)
+  const before = await read(`s.barn.crops['${firstCrop.id}']`)
+  await click(522, 394, 900)
+  const after = await read(`s.barn.crops['${firstCrop.id}']`)
+  check('an overfull barn really does lose some', after < before, `${before} -> ${after}`)
+  const told = await appears(/spoil|เน่า/i, 3000)
+  check('and the night says so', told.found, JSON.stringify(told.texts))
+
+  // A new board arriving is what an endless game turns on, so it is news too.
+  const weekLength = rules.market.weekLength
+  let sawBoard = false
+  for (let d = 0; d < weekLength + 1 && !sawBoard; d++) {
+    await poke(`
+      s.energy = 100
+      s.plots[0].cropId = '${firstCrop.id}'
+      s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.seed; t.watered = 1 })
+    `)
+    await click(522, 394, 700)
+    sawBoard = (await texts()).some(t => /new market board|ออเดอร์ชุดใหม่/i.test(t))
+  }
+  check('a new board is announced when the week turns', sawBoard, 'a week passed in silence')
 }
 
 /* ------------------------------------------------ a farm with nothing left */

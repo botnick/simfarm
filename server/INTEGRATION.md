@@ -244,22 +244,24 @@ milestones, market rules, level curve, audio cues — adding one is a JSON edit.
 Nothing in the code holds a list of them, which is what `npm run e2e` checks when
 it asserts every tool has a sound and every cue has a file.
 
-`game/public/data/strings.json` holds both languages. A missing key shows its own
-name rather than an empty space, so a half-translated build is obvious.
+`game/public/data/strings.json` holds both languages. A missing key falls back to
+English and then to its own name, which is quiet — so `npm run reach` asserts
+that both languages say everything the other says, that every line the code asks
+for exists, and that every line that exists is reachable from the code.
 
 ---
 
 ## Checking a change did not break it
 
     cd game
-    npm test             # 361  the rules
-    npm run e2e          # 195  the game in a browser, offline
+    npm test             # 371  the rules
+    npm run e2e          # 214  the game in a browser, offline
     npm run online       #  55  the game in a browser, against a real server
-    npm run facade       #  54  what the browser does with every answer a server can give
-    npm run test:server  # 145  the server refusing what it should
+    npm run facade       #  57  what the browser does with every answer a server can give
+    npm run test:server  # 151  the server refusing what it should
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
-    npm run reach        #  21  every crop, animal, recipe and reward is reachable
+    npm run reach        #  29  every crop, animal, recipe and reward is reachable
     npm run pace         #      how many days before each thing becomes available
     npm run durable      #   9  two processes over one ledger, across a restart
     npm run fatal        #  17  what the game does when it breaks, and does not do

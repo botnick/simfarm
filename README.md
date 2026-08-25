@@ -32,12 +32,13 @@ Adding a crop, an animal, a recipe or a milestone is an edit to
 
 ## Checking a change
 
-    npm test             # 361  the rules
-    npm run e2e          # 195  the game in a browser, offline
+    npm test             # 371  the rules
+    npm run e2e          # 214  the game in a browser, offline
     npm run online       #  55  the game in a browser, against a real server
-    npm run test:server  # 145  the server refusing what it should
-    npm run facade       #  54  what the browser does with every answer a server can give
-    npm run reach        #  21  every crop, animal, recipe and reward is reachable
+    npm run test:server  # 151  the server refusing what it should
+    npm run facade       #  57  what the browser does with every answer a server can give
+    npm run reach        #  29  every crop, animal, recipe and reward is reachable,
+                         #      and both languages say everything
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run durable      #   9  two processes over one ledger, across a restart
@@ -55,12 +56,30 @@ place by finding something:
   found that an online player who went broke was stranded for ever, because the
   rule that refuses an empty day and the rule that lends a bankrupt farm a seed
   contradicted each other exactly where the rescue was needed.
+- **`play`** also prints where the farm stood each morning under `TRACE=1`, and
+  that is how the worst bug in the game was found. A field cannot be sown while
+  a single dead plant stands in it, and a crop that gives more than one picking
+  leaves *every* tile dead once it is spent — so the ordinary end of a radish
+  field was a quarter of the farm that would not sow, with nothing on screen
+  saying why and no way back but twelve separate clicks. The trace showed
+  fourteen tiles dying on day seven and still dead on day twenty-four. Forty
+  days used to end at \$30; they now end several thousand ahead. The economy was
+  never the problem — the game was eating its own farmland.
+- **`facade`** holds the two halves of the online game to the same list of
+  names. An intent the browser sends and the server has never heard of fails as
+  a refusal nobody can explain: the button does nothing and nothing is logged.
 - **`pace`** answers a question `reach` does not: not *can* this be reached, but
   how many days of playing until it is. It found six of sixteen things
   unreachable inside four months.
 - **`test`** carries a differential contract between the day-end gate and the
   night: if the gate says nothing would change, running the night must change
   nothing. It found four rules that could never fire.
+- **`reach`** also holds the string table to account: both languages must say
+  everything the other says, every line the code asks for must exist, and every
+  line that exists must be reachable. That last one found forty-two orphans —
+  and three lines that were not orphans at all, but things the rules worked out
+  every night and the farm screen never read, including crops rotting in an
+  overfull barn.
 
 Run `pace` after touching `progression` or any `unlockLevel`. Content nobody can
 reach may as well not exist, and a quadratic curve is very easy to write in a way

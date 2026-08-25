@@ -156,6 +156,59 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok('every animal can be fed what it eats', cannotFeed.length === 0, cannotFeed.join(', '))
 }
 
+/* --------------------------------------------- and readable in both languages */
+{
+  // The game is played in two languages and a missing string does not throw —
+  // it falls back to English, or failing that renders its own key. Both are
+  // quiet, which is exactly why adding an English line and forgetting the Thai
+  // one would otherwise ship.
+  const { readdirSync, statSync } = await import('node:fs')
+  const strings = JSON.parse(readFileSync(new URL('../public/data/strings.json', import.meta.url), 'utf8'))
+  const langs = Object.keys(strings).filter(k => !k.startsWith('_'))
+  ok('the game speaks more than one language', langs.length > 1, langs.join(', '))
+
+  const every = new Set(langs.flatMap(l => Object.keys(strings[l])))
+  for (const l of langs) {
+    const missing = [...every].filter(k => !(k in strings[l]))
+    ok(`${l} says everything the other languages say`, missing.length === 0,
+      `${missing.length} missing: ${missing.slice(0, 6).join(', ')}`)
+    const blank = Object.entries(strings[l]).filter(([, v]) => !String(v).trim()).map(([k]) => k)
+    ok(`and none of ${l} is left blank`, blank.length === 0, blank.slice(0, 6).join(', '))
+  }
+
+  // Every line has to be reachable from the code, and every line the code asks
+  // for has to exist. A key that is asked for and missing renders as its own
+  // name on screen; a key that exists and is never asked for is a line somebody
+  // wrote, translated, and then orphaned when the screen around it was rewritten
+  // — this found forty-two of those, and three of them turned out to be things
+  // the game computed and never told the player.
+  //
+  // Any quoted literal counts as asking, not only t('key'), because keys are
+  // also reached through ternaries and lookup tables, and a scan that only
+  // understood one shape would report the rest as dead.
+  const walk = (dir) => readdirSync(dir).flatMap((name) => {
+    const path = `${dir}/${name}`
+    return statSync(path).isDirectory() ? walk(path) : path.endsWith('.js') ? [path] : []
+  })
+  const here = new URL('..', import.meta.url).pathname
+  const sources = [...walk(`${here}src`), `${here}index.html`]
+  const literals = new Set()
+  const asked = new Set()
+  for (const file of sources) {
+    let text
+    try { text = readFileSync(file, 'utf8') } catch { continue }
+    for (const m of text.matchAll(/['"`]([a-zA-Z][\w.]*)['"`]/g)) literals.add(m[1])
+    for (const m of text.matchAll(/\bt\(\s*['"]([a-zA-Z][\w.]*)['"]/g)) asked.add(m[1])
+  }
+  ok('the code asks for lines by name in the first place', asked.size > 40, `${asked.size} found`)
+
+  const unwritten = [...asked].filter(k => !every.has(k))
+  ok('every line the code asks for has been written', unwritten.length === 0, unwritten.join(', '))
+
+  const orphaned = [...every].filter(k => !literals.has(k))
+  ok('and no line is written that nothing reaches', orphaned.length === 0, orphaned.join(', '))
+}
+
 /* ------------------------------------- and reachable in a life somebody has */
 {
   // Reachable at a high enough level is not the same as reachable. This suite

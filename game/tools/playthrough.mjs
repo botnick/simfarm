@@ -98,7 +98,7 @@ const startMoney = await farm('s.money')
 const startDay = await farm('s.day')
 ok('with money to begin on', startMoney > 0, String(startMoney))
 
-let bought = 0, sown = 0, watered = 0, picked = 0, sold = 0, fed = 0, crafted = 0
+let bought = 0, sown = 0, watered = 0, picked = 0, sold = 0, fed = 0, crafted = 0, cleared = 0
 const trouble = []
 
 for (let day = 0; day < DAYS; day++) {
@@ -110,7 +110,11 @@ for (let day = 0; day < DAYS; day++) {
   // empty seed bag, because there is nothing else to do.
   const emptyFields = await farm('s.plots.filter(p => !p.cropId).length')
   const inBag = await farm('Object.values(s.seeds).reduce((a, b) => a + b, 0)')
-  const needsSeed = emptyFields > 0 && inBag === 0 && await farm('s.money') > 0
+  // Enough seed for the fields standing empty, not merely some seed. Waiting
+  // until the bag was completely bare left fields fallow for days at a time,
+  // and a farm with nothing growing and animals to feed loses money — which is
+  // the game being right and the farmer being bad at it.
+  const needsSeed = inBag < emptyFields && await farm('s.money') > 0
   if (day % 3 === 0 || needsSeed) {
     await click(420, 300, 900)
     if (await scene() === 'Shop') {
@@ -124,7 +128,7 @@ for (let day = 0; day < DAYS; day++) {
       const before = await farm('s.money')
       const empty = await farm('s.plots.filter(p => !p.cropId).length')
       const bag = await farm('Object.values(s.seeds).reduce((a, b) => a + b, 0)')
-      for (let row = 0; row < Math.max(0, empty - bag); row++) {
+      for (let row = 0; row < Math.max(0, empty - bag) && row < 4; row++) {
         const priced = await page.evaluate((n) => {
           const sc = window.__game.scene.scenes.find(x => x.scene.isActive())
           const buttons = sc.children.list
@@ -181,9 +185,33 @@ for (let day = 0; day < DAYS; day++) {
 
   /* ------------------------------------------------------------ every field */
   await home()
+  // TRACE=1 prints where the farm stood each morning. A run that ends poorer
+  // than it started is either a bad economy or a bad farmer, and the only way
+  // to tell them apart is to watch what the farmer actually had to work with.
+  if (process.env.TRACE) {
+    const row = await farm(`JSON.stringify({
+      money: s.money, energy: Math.round(s.energy), empty: s.plots.filter(p => !p.cropId).length,
+      bag: Object.values(s.seeds).reduce((a, b) => a + b, 0),
+      ripe: s.plots.reduce((n, p) => n + p.tiles.filter(t => t.stage === d.rules.stage.ripe).length, 0),
+      dead: s.plots.reduce((n, p) => n + p.tiles.filter(t => t.stage === d.rules.stage.dead).length, 0),
+      barn: Object.values(s.barn.crops).reduce((a, b) => a + b, 0),
+      animals: Object.values(s.animals).reduce((a, b) => a + b, 0),
+      fodder: s.supplies.fodder ?? 0,
+    })`)
+    const v = JSON.parse(row)
+    console.log(`  day ${String(day + 1).padStart(2)}  $${String(v.money).padStart(6)}  energy ${String(v.energy).padStart(3)}  empty ${v.empty}  bag ${String(v.bag).padStart(2)}  ripe ${String(v.ripe).padStart(2)}  dead ${String(v.dead).padStart(2)}  barn ${String(v.barn).padStart(3)}  animals ${v.animals}  fodder ${v.fodder}`)
+  }
   for (let f = 1; f <= 4; f++) {
     await key(`Digit${f}`, 700)
     if (await scene() !== 'Plot') continue
+
+    // Withered ground first. A field cannot be sown while one dead plant is
+    // standing in it, so a farmer who never clears loses the land for good —
+    // which is exactly what this run was doing before the button existed.
+    if (await farm(`s.plots[${f - 1}].tiles.filter(t => t.stage === d.rules.stage.dead).length`)) {
+      await click(248, 13, 700)
+      cleared++
+    }
 
     const sownAlready = await farm(`s.plots[${f - 1}].cropId`)
     if (!sownAlready) {
@@ -200,7 +228,7 @@ for (let day = 0; day < DAYS; day++) {
 
     // Pick anything ripe, spray anything bitten, then water what is left.
     const before = await farm('Object.values(s.barn.crops).reduce((a, b) => a + b, 0)')
-    await click(402, 13, 700)                    // PICK ALL
+    await click(456, 13, 700)                    // PICK ALL
     const after = await farm('Object.values(s.barn.crops).reduce((a, b) => a + b, 0)')
     if (after > before) picked++
 
@@ -217,7 +245,7 @@ for (let day = 0; day < DAYS; day++) {
     }
 
     const wetBefore = await farm(`s.plots[${f - 1}].tiles.filter(t => t.watered).length`)
-    await click(278, 13, 700)                    // WATER ALL
+    await click(352, 13, 700)                    // WATER ALL
     if (await farm(`s.plots[${f - 1}].tiles.filter(t => t.watered).length`) > wetBefore) watered++
     await home()
   }
@@ -277,7 +305,7 @@ for (let day = 0; day < DAYS; day++) {
     if (seed) { await click(seed.x, seed.y, 600); if (await farm(`s.plots[${f - 1}].cropId`)) sown++ }
     else await pressText('CANCEL|ยกเลิก', 300)
     // Water what was just put in, so the night is worth having.
-    await click(278, 13, 500)
+    await click(352, 13, 500)
     await home()
   }
 
@@ -308,7 +336,7 @@ const endXp = await farm('s.xp')
 const endLevel = await page.evaluate(() => window.__game.scene.scenes.find(x => x.scene.isActive())?.hud?.level ?? 1)
 
 console.log(`\n  bought on ${bought} trips · sowed ${sown} fields · watered ${watered} · picked ${picked}`)
-console.log(`  sold ${sold} times · fed ${fed} days · crafted ${crafted}`)
+console.log(`  sold ${sold} times · fed ${fed} days · crafted ${crafted} · cleared ${cleared} fields`)
 console.log(`  day ${startDay} -> ${endDay}, $${startMoney} -> $${endMoney}, level ${endLevel}, xp ${endXp}\n`)
 
 ok('the calendar ran the whole way', endDay >= startDay + DAYS - 2, `${startDay} -> ${endDay}`)

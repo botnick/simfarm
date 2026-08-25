@@ -375,6 +375,28 @@ export function harvestPlot(state, data, plotIndex) {
   return n
 }
 
+/**
+ * Clear every withered tile in a plot that energy allows.
+ *
+ * Only the dead ones. `clear` on its own will happily turn a ripe crop back
+ * into bare earth, which is fine as a deliberate one-tile choice and a disaster
+ * as a button, so the whole-field version refuses to touch anything still
+ * living. Without it a field killed by frost or pests can only be recovered
+ * twelve clicks at a time, and until it is recovered it cannot be sown at all —
+ * so the farm quietly loses a quarter of its land to one bad night.
+ */
+export function clearPlot(state, data, plotIndex) {
+  let n = 0
+  const r = data.rules
+  const plot = state.plots[indexOf(plotIndex, state.plots.length)]
+  if (!plot) return 0
+  for (let i = 0; i < plot.tiles.length; i++) {
+    if (plot.tiles[i].stage !== r.stage.dead) continue
+    if (canApply(state, data, plotIndex, i, 'clear') && applyTool(state, data, plotIndex, i, 'clear')) n++
+  }
+  return n
+}
+
 /** Water every dry tile in a plot that energy allows. */
 export function waterPlot(state, data, plotIndex) {
   let n = 0

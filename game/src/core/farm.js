@@ -270,6 +270,9 @@ export function createFarm({ data, state, server = null, onChange = () => {}, on
     harvestPlot: ({ plot }) => (server
       ? remote('harvestPlot', { plot })()
       : local(rules.harvestPlot)(plot)),
+    clearPlot: ({ plot }) => (server
+      ? remote('clearPlot', { plot })()
+      : local(rules.clearPlot)(plot)),
     buySeed: ({ cropId }) => (server
       ? remote('buySeed', { cropId })()
       : local(rules.buySeed)(cropId)),

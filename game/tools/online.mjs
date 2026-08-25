@@ -103,7 +103,7 @@ ok('the field is sown', !!crop, String(crop))
 eq('and the server has the same field', (await serverState()).plots[0].cropId, crop)
 
 /* ------------------------------------------------------------ working */
-await click(272, 14, 800)                                    // WATER ALL
+await click(352, 14, 800)                                    // WATER ALL
 const watered = await farm('s.plots[0].tiles.filter(t => t.watered).length')
 eq('every tile is watered', watered, 12)
 eq('and the server counted the energy', (await serverState()).energy, await farm('s.energy'))

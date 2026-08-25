@@ -109,4 +109,5 @@ installViewport(window.__game)
 
 // Exposed for tools/e2e.mjs so a test can ask the game what it expects to happen.
 window.__game.__rules = await import('./core/rules.js')
+window.__game.__progression = await import('./core/progression.js')
 

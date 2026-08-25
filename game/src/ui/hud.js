@@ -250,6 +250,39 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
     }
   }
   watch('milestones', tellAbout)
+
+  /**
+   * Say so when the farm levels up, wherever the player happens to be.
+   *
+   * Experience comes from picking a crop, starting a batch and filling an
+   * order, so a level can be reached in a field, the workshop, the shop or the
+   * market. The only announcement used to be a before-and-after comparison when
+   * the day ended, which meant levelling anywhere else went by with nothing but
+   * a number quietly changing on a plaque that half the screens do not even
+   * have.
+   *
+   * Held here rather than in each scene because the HUD is the one thing every
+   * screen has, and it already knows the level.
+   */
+  const milestoneSays = (level) => {
+    const listed = (rulebook?.milestones ?? []).filter(m => m.when === 'level')
+    if (listed.some(m => m.level === level)) return true
+    const every = rulebook?.progression?.milestoneEvery
+    const last = Math.max(0, ...listed.map(m => m.level))
+    return every > 0 && level > last && level % every === 0
+  }
+
+  let levelShown = null
+  const noticeLevel = (level) => {
+    // The first look at a screen simply records where the farm is.
+    if (levelShown == null || level <= levelShown) { levelShown = level; return }
+    levelShown = level
+    if (parts.levelText) pop(scene, parts.levelText, 0.45, 340)
+    // A level that a milestone is about to name does not need saying twice.
+    if (milestoneSays(level)) return
+    banner(scene, t('farm.levelUp', level))
+    sfx(scene, 'level-up')
+  }
   // Anything earned while another screen was open — or queued behind a banner
   // that never got to finish because the player walked away — is still owed.
   drainBanners(scene)
@@ -262,11 +295,12 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
     // panels differ per frame, hence asking rather than assuming a corner.
     walletAt: parts.money ? { x: parts.money.x, y: parts.money.y } : { x: 70, y: 26 },
     update(state, rules, data) {
-      if (data) api.level = levelProgress(state.xp ?? 0, data).level
+      if (data) {
+        api.level = levelProgress(state.xp ?? 0, data).level
+        noticeLevel(api.level)
+      }
       if (parts.levelText && data) {
         const p = levelProgress(state.xp ?? 0, data)
-        if (api.__shownLevel != null && p.level > api.__shownLevel) pop(scene, parts.levelText, 0.45, 340)
-        api.__shownLevel = p.level
         // The medal is a fixed circle, so a three-digit farm shrinks to fit it
         // rather than spilling over the rim.
         const lvl = String(p.level)

@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs'
 import { createFarm } from '../src/core/farm.js'
 import { newGame } from '../src/core/rules.js'
+import { INTENTS } from '../../server/intents.mjs'
 
 const data = JSON.parse(readFileSync(new URL('../public/data/game.json', import.meta.url), 'utf8'))
 
@@ -450,6 +451,24 @@ console.log('\nfarm facade\n')
   await farm.seal()
   eq('and the save waited for all three', seen, [3])
   eq('so the envelope describes the farm as it now is', farm.revision, 3)
+}
+
+{
+  // The two halves of the online game are written in different files and only
+  // meet over HTTP, where a name that exists on one side and not the other
+  // fails as a refusal the player cannot explain: the button does nothing and
+  // nothing is logged. So the names are checked against each other here, on
+  // every run, rather than the first time somebody plays online.
+  const source = readFileSync(new URL('../src/core/farm.js', import.meta.url), 'utf8')
+  const asked = [...new Set([...source.matchAll(/remote\(\s*'([a-zA-Z]+)'/g)].map(m => m[1]))].sort()
+  ok('the browser asks the server for something', asked.length > 5)
+  const missing = asked.filter(name => !INTENTS.includes(name))
+  eq('every intent the browser sends is one the server answers', missing, [])
+  // The other direction is a weaker claim — the server may answer things no
+  // screen asks for yet — but an intent nothing can reach is dead code that
+  // still widens what a tampered client may try, so it is worth knowing about.
+  const unreachable = INTENTS.filter(name => !asked.includes(name))
+  eq('and every intent the server answers is one some screen can send', unreachable, [])
 }
 
 console.log(`\n${pass} passed, ${failures.length} failed\n`)

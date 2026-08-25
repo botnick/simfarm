@@ -131,6 +131,25 @@ function playMixed(cropIds, seed) {
   return (earned - spent) / DAYS / r.plots
 }
 
+/**
+ * Do the animals pay for themselves?
+ *
+ * A flock costs money every day and pays back every morning, and the price of
+ * feed is a number in the data file that is easy to move without noticing what
+ * it does to the yard. If a kept animal ever costs more to feed than it makes,
+ * the whole second half of the game becomes a trap for anyone who takes it.
+ */
+function flockLedger() {
+  return data.animals.map((a) => {
+    const feed = data.supplies.find(s => s.id === a.feed)
+    const good = data.goods.find(g => g.id === a.produces)
+    const perDay = feed.price / feed.amount
+    const net = good.price - perDay
+    return { animal: a.name?.en ?? a.id, eats: `$${perDay.toFixed(0)}`, makes: `$${good.price}`,
+             net: Math.round(net), payback: net > 0 ? Math.ceil(a.price / net) : Infinity }
+  })
+}
+
 const seeds = [1, 7, 13, 42, 99]
 const best = rows[rows.length - 1]
 const topFive = rows.slice(-5).map(r => data.crops.find(c => (c.name?.en ?? c.name) === r.crop).id)
@@ -153,3 +172,17 @@ console.log(`\nholding back to dodge the flood: ${patient.crop} at ${Math.round(
 console.log(`mixed is ${patientGap >= 0 ? '+' : ''}${(patientGap * 100).toFixed(0)}% against patience`
   + `  ${patientGap >= 0.05 ? '(variety still wins)' : '(PATIENCE WINS — the market has stopped applying pressure)'}\n`)
 if (!(patientGap >= 0.05)) process.exitCode = 1
+
+console.log('what a kept animal is worth, per day\n')
+console.log('  animal     eats   makes    net   pays for itself in')
+for (const r of flockLedger()) {
+  console.log(`  ${r.animal.padEnd(10)} ${r.eats.padStart(4)} ${r.makes.padStart(7)} ${String(r.net).padStart(6)}`
+    + `   ${r.payback === Infinity ? 'never' : r.payback + ' days'}`)
+}
+const trap = flockLedger().filter(r => r.net <= 0)
+if (trap.length) {
+  console.error(`\n  ${trap.map(r => r.animal).join(', ')} cost more to feed than they make — keeping one is a trap\n`)
+  process.exitCode = 1
+} else {
+  console.log('\n  every animal earns more than it eats\n')
+}
