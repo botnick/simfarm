@@ -5,7 +5,8 @@ emulator, but taken apart and reassembled: the rules recovered from the original
 SWF, the art extracted from it, and the whole thing rewritten so a server owns
 the farm and the browser only draws it.
 
-It plays for ever. There is no last day.
+It plays for ever. There is no last day: crops and animals arrive between day 6
+and day 61, and after that the farm itself keeps growing with the level.
 
     cd game
     npm install
@@ -31,24 +32,38 @@ Adding a crop, an animal, a recipe or a milestone is an edit to
 
 ## Checking a change
 
-    npm test             # the rules
-    npm run e2e          # the game in a browser, offline
-    npm run online       # the game in a browser, against a real server
-    npm run play         # a real game, played for weeks, by clicking only
-    npm run test:server  # the server refusing what it should
-    npm run facade       # what the browser does with every answer a server can give
-    npm run soak         # ninety days played through the server over HTTP
-    npm run durable      # two processes over one ledger, across a restart
-    npm run reach        # every crop, animal, recipe and reward is reachable
-    npm run pace         # how many days before each thing becomes available
-    npm run sim          # the crop balance table
-    npm run mobile       # both orientations
-    npm run regions      # every screen has the hotspots it needs
+    npm test             # 361  the rules
+    npm run e2e          # 195  the game in a browser, offline
+    npm run online       #  55  the game in a browser, against a real server
+    npm run test:server  # 145  the server refusing what it should
+    npm run facade       #  54  what the browser does with every answer a server can give
+    npm run reach        #  21  every crop, animal, recipe and reward is reachable
+    npm run play         #  16  a real game, played for weeks, by clicking only
+    npm run soak         #  13  ninety days played through the server over HTTP
+    npm run durable      #   9  two processes over one ledger, across a restart
+    npm run pace         #   9  how long before each thing becomes available
+    npm run mobile       #   4  both orientations
+    npm run regions      #      every screen has the hotspots it needs
+    npm run sim          #      the crop balance table
 
-`play` is the one that would notice the game being no fun: it never touches the
-farm's state, it just presses buttons for three weeks and asks whether the farm
-grew. `pace` is the one to run after changing anything about levels — content
-nobody can reach may as well not exist.
+Three of these exist because the others had blind spots, and each earned its
+place by finding something:
+
+- **`play`** would notice the game being no fun. It never touches the farm's
+  state — it presses buttons for three weeks and asks whether the farm grew. It
+  found that an online player who went broke was stranded for ever, because the
+  rule that refuses an empty day and the rule that lends a bankrupt farm a seed
+  contradicted each other exactly where the rescue was needed.
+- **`pace`** answers a question `reach` does not: not *can* this be reached, but
+  how many days of playing until it is. It found six of sixteen things
+  unreachable inside four months.
+- **`test`** carries a differential contract between the day-end gate and the
+  night: if the gate says nothing would change, running the night must change
+  nothing. It found four rules that could never fire.
+
+Run `pace` after touching `progression` or any `unlockLevel`. Content nobody can
+reach may as well not exist, and a quadratic curve is very easy to write in a way
+that quietly puts half the game behind a year of play.
 
 ## Credit
 

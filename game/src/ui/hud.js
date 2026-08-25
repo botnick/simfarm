@@ -9,7 +9,7 @@ import { t, tx, nextLang, setLang } from '../core/i18n.js'
 import { touchPad } from '../core/device.js'
 import { levelProgress } from '../core/progression.js'
 import { farmLimits } from '../core/rules.js'
-import { banner, countTo, pop } from './fx.js'
+import { banner, countTo, drainBanners, pop } from './fx.js'
 import { isMuted, sfx, toggleMuted } from '../core/audio.js'
 
 // What the server says, and what a player can make sense of.
@@ -190,20 +190,29 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
 
   // Refusals come from the transport, not from a scene, so the HUD listens for
   // them rather than every screen having to remember to.
-  //
-  // Both events, deliberately: Phaser raises `setdata` the first time a key is
-  // written and `changedata` only afterwards, so listening for one of them means
-  // missing either the first of these a player ever sees or all the rest.
-  const onRefusal = (_p, value) => {
+  /**
+   * Watch one key on the registry.
+   *
+   * Two events, deliberately. The first time a key is written the registry
+   * raises a general `setdata` naming the key; every write after that raises a
+   * `changedata-<key>` of its own. Listening for only one of them means missing
+   * either the very first of these a player ever sees, or all the rest.
+   */
+  const watch = (key, handler) => {
+    const onSet = (_parent, name, value) => { if (name === key) handler(value) }
+    const onChange = (_parent, value) => handler(value)
+    scene.registry.events.on('setdata', onSet)
+    scene.registry.events.on(`changedata-${key}`, onChange)
+    scene.events.once('shutdown', () => {
+      scene.registry.events.off('setdata', onSet)
+      scene.registry.events.off(`changedata-${key}`, onChange)
+    })
+  }
+
+  watch('refusal', (value) => {
     if (!value) return
     toast(scene, WIDTH / 2, 96, t(REFUSALS[value.reason] ?? 'refused.other'), '#ffd6d6')
     sfx(scene, 'refused')
-  }
-  scene.registry.events.on('changedata-refusal', onRefusal)
-  scene.registry.events.on('setdata-refusal', onRefusal)
-  scene.events.once('shutdown', () => {
-    scene.registry.events.off('changedata-refusal', onRefusal)
-    scene.registry.events.off('setdata-refusal', onRefusal)
   })
 
   // A milestone can be earned anywhere — picking a crop in a field, starting a
@@ -215,31 +224,37 @@ export function makeHud(scene, frame, { day = false, dayAt = { x: 8, y: 8 }, lev
   // everything they had ever done, every time they changed screen.
   const announced = scene.registry.get('announcedMilestones') ?? new Set()
   scene.registry.set('announcedMilestones', announced)
+  // Ids handed to the queue but not yet seen, so a second screen does not queue
+  // the same congratulation behind the first.
+  const owed = scene.registry.get('owedMilestones') ?? new Set()
+  scene.registry.set('owedMilestones', owed)
   const rulebook = scene.registry.get('data')
 
   const tellAbout = (list) => {
     for (const m of list ?? []) {
       const id = m.milestoneId ?? m
-      if (!id || announced.has(id)) continue
-      announced.add(id)
+      // Owed until it has actually been on screen. Marking it when it joined the
+      // queue lost it for good if the player changed screen first.
+      if (!id || announced.has(id) || owed.has(id)) continue
+      owed.add(id)
       const known = (rulebook?.milestones ?? []).find(x => x.id === id)
       // Milestones past the listed ones are generated from a rule, so their name
       // is generated too rather than being a missing string.
       const level = /^level-(\d+)$/.exec(id)
       const name = known ? tx(known.name) : level ? t('hud.levelReached', level[1]) : id
-      banner(scene, t('hud.milestone'), { tone: 'gold', sub: name })
-      sfx(scene, 'level-up')
+      banner(scene, t('hud.milestone'), {
+        tone: 'gold',
+        sub: name,
+        onShown: () => { owed.delete(id); announced.add(id); sfx(scene, 'level-up') },
+      })
     }
   }
-  const onMilestone = (_p, value) => tellAbout(value)
-  scene.registry.events.on('changedata-milestones', onMilestone)
-  scene.registry.events.on('setdata-milestones', onMilestone)
-  scene.events.once('shutdown', () => {
-    scene.registry.events.off('changedata-milestones', onMilestone)
-    scene.registry.events.off('setdata-milestones', onMilestone)
-  })
-  // Anything earned while another screen was open is still owed to the player.
+  watch('milestones', tellAbout)
+  // Anything earned while another screen was open — or queued behind a banner
+  // that never got to finish because the player walked away — is still owed.
+  drainBanners(scene)
   tellAbout(scene.registry.get('milestones'))
+
 
   const api = {
     level: 1,

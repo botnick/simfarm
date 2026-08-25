@@ -129,24 +129,65 @@ export function ripple(scene, x, y, colour = 0xffffff, r = 34, depth = 8000) {
  * than stack, because two congratulations printed on top of each other are one
  * illegible congratulation.
  */
-const banners = new WeakMap()
+/**
+ * The queue lives on the game, not on the scene.
+ *
+ * A banner is drawn into whichever scene is open, but the fact that the game
+ * owes the player one is not that scene's business. Held per-scene, walking to
+ * the shop while a congratulation was waiting simply lost it — and the thing it
+ * was congratulating had already been marked as told.
+ */
+const KEY = 'pendingBanners'
 
-export function banner(scene, text, { tone = 'gold', sub = null } = {}) {
-  const queue = banners.get(scene) ?? []
-  banners.set(scene, queue)
-  queue.push({ text, tone, sub })
-  if (queue.length === 1) showNext(scene, queue)
+const queueOf = (scene) => {
+  const q = scene.registry.get(KEY) ?? []
+  scene.registry.set(KEY, q)
+  return q
 }
 
-function showNext(scene, queue) {
-  const next = queue[0]
+export function banner(scene, text, { tone = 'gold', sub = null, onShown = null } = {}) {
+  const q = queueOf(scene)
+  q.push({ text, tone, sub, onShown })
+  // Only the first starts the chain; the rest are pulled through by the one in
+  // front of them finishing. If the head is already on screen this does nothing,
+  // which is the point of a queue.
+  if (q.length === 1) drainBanners(scene)
+}
+
+/**
+ * Draw whatever is owed, in this scene, until there is nothing left.
+ *
+ * Called from the HUD while the scene is still being built, when Phaser does not
+ * yet consider it active — so the attempt is deferred to the scene's first
+ * update. Without that, a banner whose scene closed mid-animation sat at the
+ * head of the queue for ever and everything behind it was never seen again.
+ */
+export function drainBanners(scene) {
+  if (!queueOf(scene).length) return
+  if (scene.scene?.isActive?.()) { showNext(scene); return }
+  scene.events.once('update', () => showNext(scene))
+}
+
+function showNext(scene) {
+  const q = queueOf(scene)
+  const next = q[0]
   if (!next) return
-  const done = () => {
-    queue.shift()
-    if (queue.length) showNext(scene, queue)
-  }
-  if (!scene.scene?.isActive?.()) { done(); return }
-  levelUp(scene, scene.scale ? 300 : 300, next.sub ? 138 : 150, next.text, 9500, next.tone, next.sub, done)
+  // Nothing to draw into. It stays owed, and the next screen's HUD picks it up.
+  if (!scene.scene?.isActive?.()) return
+  // A banner already running in this scene pulls the rest through itself.
+  if (next.showing) return
+  next.showing = true
+
+  // Marked as shown at the moment it is actually shown, not when it joined the
+  // queue: anything else loses the item if the scene closes first.
+  next.onShown?.()
+  levelUp(scene, 300, next.sub ? 138 : 150, next.text, 9500, next.tone, next.sub, () => {
+    q.shift()
+    showNext(scene)
+  })
+  // If this scene closes before the banner finishes, the item is put back at the
+  // head unshown so the next screen can pick it up rather than losing it.
+  scene.events.once('shutdown', () => { if (q[0] === next) next.showing = false })
 }
 
 /**

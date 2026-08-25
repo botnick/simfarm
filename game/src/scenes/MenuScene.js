@@ -103,6 +103,15 @@ export default class MenuScene extends Phaser.Scene {
    */
   async begin(state, sealed = null) {
     const data = this.registry.get('data')
+
+    // A farm starts with none of the previous farm's history. These live on the
+    // registry so they survive changing screen, which also means they survive
+    // starting a new game — and a second farm would then be silently refused
+    // every congratulation the first one had already had.
+    this.registry.set('announcedMilestones', new Set())
+    this.registry.set('owedMilestones', new Set())
+    this.registry.set('pendingBanners', [])
+    this.registry.set('milestones', null)
     const server = this.registry.get('makeServer')()
     const createFarm = this.registry.get('createFarm')
 

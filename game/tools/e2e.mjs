@@ -52,6 +52,24 @@ const poke = (body) => page.evaluate(new Function(`
   const g = window.__game, s = g.registry.get('state'), d = g.registry.get('data'); ${body}
 `))
 const scene = () => page.evaluate(() => window.__game.scene.scenes.filter(x => x.scene.isActive()).map(x => x.scene.key).join('+'))
+
+/**
+ * Wait for something to appear on screen.
+ *
+ * Banners queue rather than stack, so a congratulation can be several seconds
+ * behind the thing that caused it. Checking once is checking whether it happened
+ * to be that one's turn.
+ */
+const appears = async (re, ms = 6000) => {
+  const until = Date.now() + ms
+  let last = []
+  while (Date.now() < until) {
+    last = await texts()
+    if (last.some(t => re.test(t))) return { found: true, texts: last }
+    await wait(200)
+  }
+  return { found: false, texts: last }
+}
 // Every visible string in the running scene, for checking what the player reads.
 const texts = () => page.evaluate(() => {
   const g = window.__game
@@ -777,10 +795,10 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
   await page.evaluate((id) => {
     window.__game.registry.set('milestones', [{ eventId: 'e', milestoneId: id }])
   }, unseen.id)
-  await wait(700)
-  const said = await texts()
-  check('a milestone is announced', said.some(t => /WELL DONE|ยินดีด้วย/.test(t)), JSON.stringify(said))
-  check('and says which one', said.some(t => t === unseen.name), `looking for ${unseen.name}`)
+  const shown = await appears(/WELL DONE|ยินดีด้วย/)
+  check('a milestone is announced', shown.found, JSON.stringify(shown.texts))
+  const named = await appears(new RegExp(`^${unseen.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
+  check('and says which one', named.found, `looking for ${unseen.name} in ${JSON.stringify(named.texts)}`)
 
   // And only once, however many screens the player walks through.
   await wait(1800)
@@ -794,12 +812,11 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
   await page.evaluate(() => {
     window.__game.registry.set('milestones', [{ eventId: 'f', milestoneId: 'level-40' }])
   })
-  await wait(700)
-  const generated = await texts()
+  const generated = await appears(/^Level 40$|^เลเวล 40$/)
   check('a generated milestone is named, not printed as an id',
-    generated.some(t => /Level 40|เลเวล 40/.test(t)) && !generated.some(t => t === 'level-40'),
-    JSON.stringify(generated))
-  await wait(2000)
+    generated.found && !generated.texts.includes('level-40'), JSON.stringify(generated.texts))
+  // Let the queue empty before asking about the next thing.
+  await appears(/nothing at all will ever match this/, 2500)
 
   // A season closing is the only scoreboard an endless game has.
   await poke(`
@@ -810,15 +827,93 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
     s.plots[0].cropId = '${firstCrop.id}'
     s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.seed; t.watered = 1 })
   `)
-  await click(522, 394, 1200)
-  const closed = await texts()
-  check('the end of a season is announced',
-    closed.some(t => /SEASON OVER|จบฤดูกาล/.test(t)), JSON.stringify(closed))
-  check('with what it earned',
-    closed.some(t => /12,345/.test(t)), JSON.stringify(closed))
-  check('and that it was a personal best',
-    closed.some(t => /best season yet|ดีที่สุด/.test(t)), JSON.stringify(closed))
-  await wait(2200)
+  await click(522, 394, 600)
+  const closed = await appears(/SEASON OVER|จบฤดูกาล/)
+  check('the end of a season is announced', closed.found, JSON.stringify(closed.texts))
+  check('with what it earned', closed.texts.some(t => /12,345/.test(t)), JSON.stringify(closed.texts))
+  const best = await appears(/best season yet|ดีที่สุด/)
+  check('and that it was a personal best', best.found, JSON.stringify(best.texts))
+  await appears(/nothing at all will ever match this/, 2500)
+}
+
+/* ------------------------------ a new farm is congratulated for its own work */
+{
+  // What the player has been told lives on the registry so it survives changing
+  // screen — which also means it survives starting a new game, and a second farm
+  // would then be silently refused every congratulation the first one had.
+  const beforeNewGame = await page.evaluate(() =>
+    [...(window.__game.registry.get('announcedMilestones') ?? [])].length)
+  check('this farm has been congratulated for things', beforeNewGame > 0, String(beforeNewGame))
+
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
+  await new Promise(r => setTimeout(r, 2400))
+  await click(208, 284, 900)
+  eq('a new game starts', await scene(), 'Farm')
+
+  const afterNewGame = await page.evaluate(() => ({
+    done: [...(window.__game.registry.get('announcedMilestones') ?? [])],
+    owed: [...(window.__game.registry.get('owedMilestones') ?? [])],
+    queued: (window.__game.registry.get('pendingBanners') ?? []).length,
+  }))
+  eq('and remembers nothing of the last one', afterNewGame.done.length, 0)
+  eq('nor anything it still owed', afterNewGame.owed.length, 0)
+  eq('nor anything it had waiting', afterNewGame.queued, 0)
+
+  // So the same milestone is celebrated again, on this farm.
+  const first = await read('d.milestones[0]')
+  await page.evaluate((id) => {
+    window.__game.registry.set('milestones', [{ eventId: 'again', milestoneId: id }])
+  }, first.id)
+  const told = await appears(new RegExp(`^${first.name.en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
+  check('and the new farm is told about it too', told.found,
+    `looking for ${first.name.en} in ${JSON.stringify(told.texts)}`)
+  await appears(/nothing at all will ever match this/, 2500)
+}
+
+/* --------------------------- a congratulation survives walking away from it */
+{
+  // The banner is drawn into whichever screen is open, but the fact that the
+  // game owes the player one is not that screen's business. Earn something and
+  // leave immediately: it has to be waiting on the next screen rather than lost,
+  // and it must not have been quietly marked as already told.
+  for (let i = 0; i < 4 && await scene() !== 'Farm'; i++) { await page.keyboard.press('Escape'); await wait(500) }
+
+  const nextUnseen = await page.evaluate(() => {
+    const g = window.__game
+    const done = g.registry.get('announcedMilestones') ?? new Set()
+    const owed = g.registry.get('owedMilestones') ?? new Set()
+    const m = g.registry.get('data').milestones.find(x => !done.has(x.id) && !owed.has(x.id))
+    return m ? { id: m.id, name: m.name.en } : null
+  })
+  check('there is another milestone to earn', !!nextUnseen, 'all of them are already announced')
+
+  if (nextUnseen) {
+    await page.evaluate((id) => {
+      window.__game.registry.set('milestones', [{ eventId: 'walk', milestoneId: id }])
+    }, nextUnseen.id)
+    // Leave at once, before it can have finished.
+    await page.keyboard.press('KeyC')
+    await wait(900)
+    eq('and the player walks off to another screen', await scene(), 'Coop')
+
+    const waiting = await appears(new RegExp(`^${nextUnseen.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
+    check('the congratulation is waiting there instead of being lost',
+      waiting.found, `looking for ${nextUnseen.name} in ${JSON.stringify(waiting.texts)}`)
+
+    await appears(/nothing at all will ever match this/, 2500)
+    const settled = await page.evaluate(() => ({
+      done: [...(window.__game.registry.get('announcedMilestones') ?? [])],
+      owed: [...(window.__game.registry.get('owedMilestones') ?? [])],
+      queued: (window.__game.registry.get('pendingBanners') ?? []).length,
+    }))
+    check('and once seen it is settled', settled.done.includes(nextUnseen.id), JSON.stringify(settled))
+    eq('with nothing left owed', settled.owed.length, 0)
+    eq('and nothing left in the queue', settled.queued, 0)
+
+    await page.keyboard.press('Escape')
+    await wait(600)
+  }
 }
 
 /* ------------------------------------------------ a farm with nothing left */
