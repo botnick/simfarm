@@ -52,9 +52,12 @@ export default class BootScene extends Phaser.Scene {
     // to match it and lives alongside the product art.
     for (const a of data.animals) if (a.image) this.load.image(`animal:${a.id}`, `assets/goods/${a.image}.png`)
     for (const sp of data.supplies) if (sp.image) this.load.image(`supply:${sp.id}`, `assets/goods/${sp.image}.png`)
-    // Scene plates are exact 600x420 renders of the original frames.
+    // Scene plates. A frame that has been redrawn ships as a PNG at the same
+    // 600x420 layout as the plate it replaces, so no hotspot or click moves.
+    const REDRAWN = new Set(['farm'])
     for (const s of ['menu', 'farm', 'plot1', 'plot2', 'plot3', 'plot4', 'coop', 'village', 'shop', 'shop_animal']) {
-      this.load.svg(`scene:${s}`, `assets/scenes/${s}.svg`, { width: WIDTH * RENDER_SCALE, height: HEIGHT * RENDER_SCALE })
+      if (REDRAWN.has(s)) this.load.image(`scene:${s}`, `assets/scenes/${s}.png`)
+      else this.load.svg(`scene:${s}`, `assets/scenes/${s}.svg`, { width: WIDTH * RENDER_SCALE, height: HEIGHT * RENDER_SCALE })
     }
     // Every cue the data file names, and nothing else.
     for (const [key, path] of audioManifest(data)) this.load.audio(key, path)
