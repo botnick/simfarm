@@ -25,10 +25,22 @@ STAGES = [1, 2, 3, 4, 5, 6]
 # that. Matching it is what keeps a radish the size of a turnip.
 SCALE = 1.6 * 2
 REFERENCE = {
-    "radish":    (80.6, 58.55),    # turnip     — leafy root
-    "sunflower": (94.8, 108.55),   # corn       — tall single stalk
-    "chili":     (81.7, 71.35),    # tomato     — bush
-    "pumpkin":   (73.45, 57.7),    # watermelon — sprawling vine
+    # The four added crops borrow the box of the SWF crop they most resemble.
+    "radish":     (80.6, 58.55),    # turnip     — leafy root
+    "sunflower":  (94.8, 108.55),   # corn       — tall single stalk
+    "chili":      (81.7, 71.35),    # tomato     — bush
+    "pumpkin":    (73.45, 57.7),    # watermelon — sprawling vine
+    # The eight the game started with keep their own boxes, so a drawn
+    # replacement lands exactly where the extracted one stood and nothing on the
+    # field moves.
+    "turnip":     (80.6, 58.55),
+    "carrot":     (81.25, 43.3),
+    "potato":     (86.95, 52.25),
+    "tomato":     (81.7, 71.35),
+    "corn":       (94.8, 108.55),
+    "strawberry": (89.8, 48.25),
+    "grape":      (85.4, 118.25),
+    "watermelon": (73.45, 57.7),
 }
 
 NEAR_WHITE = 236

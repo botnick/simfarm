@@ -663,7 +663,8 @@
         "en": "Very easy to plant. Grows very fast.",
         "th": "ปลูกง่ายที่สุด โตไวมาก เหมาะเริ่มต้น"
       },
-      "unlockLevel": 1
+      "unlockLevel": 1,
+      "artFormat": "png"
     },
     {
       "id": "radish",
