@@ -699,7 +699,8 @@
         "en": "Easy to plant and quick to pick.",
         "th": "ปลูกง่าย เก็บไว ราคาพอใช้"
       },
-      "unlockLevel": 1
+      "unlockLevel": 1,
+      "artFormat": "png"
     },
     {
       "id": "potato",
@@ -716,7 +717,8 @@
         "en": "Takes longer than a carrot, but sells for a lot more.",
         "th": "ใช้เวลานานกว่าแครอท แต่ขายได้แพงกว่ามาก"
       },
-      "unlockLevel": 3
+      "unlockLevel": 3,
+      "artFormat": "png"
     },
     {
       "id": "sunflower",
@@ -751,7 +753,8 @@
         "en": "Slow to start, then gives you four pickings.",
         "th": "เริ่มช้าหน่อย แต่เก็บได้ถึง 4 รอบ"
       },
-      "unlockLevel": 5
+      "unlockLevel": 5,
+      "artFormat": "png"
     },
     {
       "id": "corn",
@@ -768,7 +771,8 @@
         "en": "Needs patience, keeps giving, and grinds into feed.",
         "th": "ต้องอดทน แต่เก็บได้ 5 รอบ และบดเป็นอาหารสัตว์ได้"
       },
-      "unlockLevel": 7
+      "unlockLevel": 7,
+      "artFormat": "png"
     },
     {
       "id": "chili",
@@ -812,7 +816,8 @@
         "en": "Harder to raise, but the price is high.",
         "th": "เลี้ยงยากขึ้นมาหน่อย แต่ราคาดี"
       },
-      "unlockLevel": 9
+      "unlockLevel": 9,
+      "artFormat": "png"
     },
     {
       "id": "pumpkin",
@@ -856,7 +861,8 @@
         "en": "One enormous payday. Losing it to a bug really hurts.",
         "th": "ก้อนเดียวได้เงินก้อนโต แต่ถ้าโดนหนอนคือเจ็บ"
       },
-      "unlockLevel": 12
+      "unlockLevel": 12,
+      "artFormat": "png"
     },
     {
       "id": "grape",
@@ -873,7 +879,8 @@
         "en": "The longest wait on the farm — and six harvests of profit.",
         "th": "รอนานที่สุดในไร่ แลกกับกำไร 6 รอบ"
       },
-      "unlockLevel": 13
+      "unlockLevel": 13,
+      "artFormat": "png"
     }
   ],
   "_generatedArt": "goods with an `image` are drawn from game/public/assets/goods/<image>.png, produced by tools/gen-art.mjs and cut out by tools/prep-generated.py. Goods without one fall back to a drawn jar in the good's colour.",

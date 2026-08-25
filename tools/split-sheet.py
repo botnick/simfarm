@@ -20,6 +20,7 @@ from PIL import Image
 from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parent.parent
+STAGES = 6       # a growth sheet always has exactly this many drawings on it
 NEAR_WHITE = 244
 
 
@@ -60,44 +61,57 @@ def drawings(sheet):
     if not pieces:
         return [], None
 
-    # A drawing is usually one piece of connected ink, but not always: a handful
-    # of seeds is three or four separate blobs. Big pieces are therefore taken as
-    # drawings in their own right and never joined to each other — their boxes
-    # overlap, since a leaf reaches across its neighbour — while small ones are
-    # gathered up by proximity, which is what makes the seeds one drawing.
-    biggest = max(p["size"] for p in pieces)
-    large = [p["box"] for p in pieces if p["size"] >= biggest * 0.15]
-    small = [p["box"] for p in pieces if p["size"] < biggest * 0.15]
+    # A drawing is usually one piece of connected ink, and sometimes several: a
+    # handful of seeds is three or four blobs, and a withered plant sheds leaves
+    # that touch nothing. Merging pieces by how close they are kept getting this
+    # wrong in both directions — it split the seeds apart, and it swallowed a
+    # dead plant into the ripe one standing beside it, so a tomato arrived in the
+    # game with a corpse next to it.
+    #
+    # What is known for certain is the count: a growth sheet has six drawings on
+    # it, no more and no less. So the pieces are grouped into exactly six by
+    # where they sit, which needs no threshold and cannot merge two plants or
+    # split one. Pieces are weighted by size, so a stray leaf joins the plant it
+    # fell from rather than dragging a cluster towards itself.
+    if len(pieces) < STAGES:
+        return [], None
+    centres = np.array([[(p["box"][0] + p["box"][2]) / 2, (p["box"][1] + p["box"][3]) / 2] for p in pieces])
+    weights = np.array([p["size"] for p in pieces], dtype=float)
 
-    NEAR = 60
-    def close(a, b):
-        return (a[0] - NEAR < b[2] and b[0] - NEAR < a[2]
-                and a[1] - NEAR < b[3] and b[1] - NEAR < a[3])
+    # Start from six pieces spread across the sheet, not the six heaviest. The
+    # heaviest can easily be two limbs of the same withered plant, which leaves
+    # one drawing with two clusters and two other drawings sharing a third: the
+    # seeds and the sprout came back in one cell that way, and a single fallen
+    # leaf got a cell of its own. Taking the largest piece first and then
+    # repeatedly the piece furthest from everything already chosen puts exactly
+    # one seed on each drawing.
+    seeds = [centres[int(np.argmax(weights))]]
+    while len(seeds) < STAGES:
+        away = ((centres[:, None, :] - np.array(seeds)[None, :, :]) ** 2).sum(axis=2).min(axis=1)
+        seeds.append(centres[int(np.argmax(away * np.sqrt(weights)))])
+    seeds = np.array(seeds, dtype=float)
+    for _ in range(40):
+        d = ((centres[:, None, :] - seeds[None, :, :]) ** 2).sum(axis=2)
+        belongs = d.argmin(axis=1)
+        moved = 0.0
+        for k in range(STAGES):
+            members = belongs == k
+            if not members.any():
+                continue
+            w = weights[members][:, None]
+            centre = (centres[members] * w).sum(axis=0) / w.sum()
+            moved = max(moved, float(np.abs(centre - seeds[k]).max()))
+            seeds[k] = centre
+        if moved < 0.5:
+            break
 
-    joined = True
-    while joined:
-        joined = False
-        for i in range(len(small)):
-            for j in range(i + 1, len(small)):
-                if close(small[i], small[j]):
-                    a, b = small[i], small[j]
-                    small[i] = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
-                    small.pop(j)
-                    joined = True
-                    break
-            if joined:
-                break
-
-    # A stray piece sitting on a big drawing belongs to it; one on its own is a
-    # drawing of its own, which is what the seeds are.
-    boxes = [list(b) for b in large]
-    for s in small:
-        touching = next((b for b in boxes if close(b, s)), None)
-        if touching:
-            touching[:] = [min(touching[0], s[0]), min(touching[1], s[1]),
-                           max(touching[2], s[2]), max(touching[3], s[3])]
-        else:
-            boxes.append(s)
+    boxes = []
+    for k in range(STAGES):
+        members = [pieces[i]["box"] for i in range(len(pieces)) if belongs[i] == k]
+        if not members:
+            return [], None
+        boxes.append([min(b[0] for b in members), min(b[1] for b in members),
+                      max(b[2] for b in members), max(b[3] for b in members)])
 
     # Reading order: down the sheet in bands, left to right inside each.
     boxes.sort(key=lambda b: b[1])
@@ -150,45 +164,51 @@ def main() -> int:
     # whatever is standing on it, so grey is kept only directly below this
     # drawing and cleared everywhere else.
     pad = 30
+    #
+    # Ownership goes by where a piece's middle is, not by how much of it happens
+    # to fall inside a box. A leaf reaching across from the plant next door can
+    # have most of its length inside this box while plainly belonging to the
+    # other one; its middle never does. Counting pixels left a stray leaf beside
+    # three of the eight crops.
     owner = np.zeros(labels.max() + 1, dtype=np.int32)
-    for tag in range(1, labels.max() + 1):
-        ys, xs = np.where(labels == tag)
-        if not len(xs):
-            continue
-        best, most = 0, 0
+    centres = ndimage.center_of_mass(labels > 0, labels, range(1, labels.max() + 1))
+    for tag, (cy, cx) in enumerate(centres, start=1):
         for stage, (x0, y0, x1, y1) in enumerate(boxes, start=1):
-            inside = int(np.count_nonzero((xs >= x0) & (xs < x1) & (ys >= y0) & (ys < y1)))
-            if inside > most:
-                best, most = stage, inside
-        owner[tag] = best
+            if x0 <= cx < x1 and y0 <= cy < y1:
+                owner[tag] = stage
+                break
 
     rgb = np.asarray(Image.open(src).convert("RGB")).astype(np.int16)
     high, low = rgb.max(axis=2), rgb.min(axis=2)
     greyish = (high - low <= 40) & (high < 244) & (high >= 120)
 
+    # Each sprite is built from its own pixels onto fresh paper, rather than cut
+    # out of the sheet with a margin. Cutting with a margin kept pulling in the
+    # neighbours: the drawings sit close enough that their boxes overlap, so
+    # whatever rule decides who owns a piece — most pixels inside, or the middle
+    # inside — there is a sheet where it gets one wrong, and a tomato arrives in
+    # the game with a dead plant standing next to it. Copying only what belongs
+    # to this drawing makes that impossible rather than unlikely.
+    sheet_rgba = np.array(sheet)
     for stage, (x0, y0, x1, y1) in enumerate(boxes, start=1):
-        left, top = max(0, x0 - pad), max(0, y0 - pad)
-        right, bottom = min(sheet.width, x1 + pad), min(sheet.height, y1 + pad)
-        art = np.array(sheet.crop((left, top, right, bottom)))
-
-        tags = labels[top:bottom, left:right]
-        mine = np.isin(tags, np.where(owner == stage)[0]) & (tags != 0)
-        # The shadow this one casts: grey, under its own width.
+        mine = np.isin(labels, np.where(owner == stage)[0]) & (labels != 0)
+        # The shadow it casts: grey, beneath its own width, within reach below.
         under = np.zeros_like(mine)
-        under[:, max(0, x0 - left):max(0, x1 - left)] = True
-        shadow = greyish[top:bottom, left:right] & under
-        # Keep this drawing and the shadow under it; everything else in the box
-        # is paper. Clearing only what is labelled left the odd speck and the
-        # pale rim of a neighbour's shadow behind, since neither is ink.
-        #
-        # The mask is grown a little first: it was built from a hard ink
-        # threshold, so the soft pixels along this drawing's own outline are not
-        # in it, and clearing them would file the edge flat.
-        keep = ndimage.binary_dilation(mine, iterations=3) | shadow
-        art[~keep] = (255, 255, 255, 255)
+        under[y0:min(sheet.height, y1 + 60), x0:x1] = True
+        keep = ndimage.binary_dilation(mine, iterations=3) | (greyish & under)
+        if not keep.any():
+            continue
+        ys, xs = np.where(keep)
+        top, bottom = ys.min(), ys.max() + 1
+        left, right = xs.min(), xs.max() + 1
 
+        pad = 12
+        art = np.full((bottom - top + pad * 2, right - left + pad * 2, 4), 255, dtype=np.uint8)
+        window = keep[top:bottom, left:right]
+        art[pad:pad + (bottom - top), pad:pad + (right - left)][window] = \
+            sheet_rgba[top:bottom, left:right][window]
         Image.fromarray(art).save(out / f"crop-{name}-{stage}.png")
-        print(f"  stage {stage}: {right - left}x{bottom - top}")
+        print(f"  stage {stage}: {art.shape[1]}x{art.shape[0]}")
     print(f"wrote 6 stages to generated/crop-{name}-*.png")
     return 0
 
