@@ -79,22 +79,40 @@ def fitted(name, width, height=None):
     return im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), Image.LANCZOS)
 
 
+def ground(size):
+    """A field of grass, tiled from a patch of the drawn scene.
+
+    Asking for a full-bleed background does not work: this model draws objects
+    on white, and told four different ways to fill the rectangle it returned a
+    round green island on white three times out of four. What it does draw well
+    is a scene — so a patch of clean grass is taken from one of those and tiled,
+    which gives the same hand and covers the plate.
+    """
+    patch = ROOT / "generated/_plans/grass-patch.png"
+    if not patch.exists():
+        return Image.new("RGBA", size, (150, 200, 110, 255))
+    tile = Image.open(patch).convert("RGBA")
+    out = Image.new("RGBA", size)
+    for y in range(0, size[1], tile.height):
+        for x in range(0, size[0], tile.width):
+            # Every other row and column flipped, so the seams do not line up
+            # into a visible grid.
+            t = tile
+            if (x // tile.width) % 2:
+                t = t.transpose(Image.FLIP_LEFT_RIGHT)
+            if (y // tile.height) % 2:
+                t = t.transpose(Image.FLIP_TOP_BOTTOM)
+            out.alpha_composite(t, (x, y))
+    return out
+
+
 def build(name) -> int:
     spec = SCENES.get(name)
     if not spec:
         print(f"no recipe for {name}")
         return 1
 
-    ground = fitted(spec["ground"], SIZE[0] * 2)
-    if ground is None:
-        print(f"missing ground piece {spec['ground']}")
-        return 1
-    plate = Image.new("RGBA", SIZE, (255, 255, 255, 255))
-    # Cover the plate with the ground, cropped from the middle so its edges do
-    # not show.
-    ground = ground.resize((SIZE[0], max(SIZE[1], round(ground.height * SIZE[0] / ground.width))), Image.LANCZOS)
-    plate.alpha_composite(ground.crop((0, 0, SIZE[0], SIZE[1])), (0, 0))
-
+    plate = ground(SIZE)
     where = regions(spec["frame"])
     placed = []
     # Far things first so near things overlap them, which is what a low camera
@@ -108,11 +126,9 @@ def build(name) -> int:
         if im is None:
             print(f"  {role}: missing piece {piece}")
             continue
-        # Sat in the rectangle, standing on its floor: a house belongs at the
-        # bottom of its hotspot, not floating in the middle of it.
         x = round(r["x"] + (r["w"] - im.width) / 2)
         y = round(r["y"] + r["h"] - im.height)
-        plate.alpha_composite(im, (x, max(0, y)) if y >= 0 else (x, 0))
+        plate.alpha_composite(im, (x, max(0, y)))
         placed.append(f"{role}->{piece}")
 
     for piece, cx, cy, w in spec.get("extras", []):

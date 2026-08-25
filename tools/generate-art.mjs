@@ -140,11 +140,18 @@ const SHEET = (plant) => [
  * comes along with it.
  */
 const SCENE = (what) => [
-  `A ${what}, seen from above at a slight angle, filling the whole frame edge to edge`,
-  'THE ATTACHED PLAN IS A LAYOUT, NOT A PICTURE: paint the scene over it and keep every coloured block exactly where it sits, at the same size and shape',
-  'brown diamonds are tilled fields of bare earth, the red-roofed block is the farm cottage, the tan block is the wooden hen house, the pale ellipse is a dirt road leaving the farm, and the green is grass',
-  'fill the grass between them with small scenery — bushes, tufts, flowers, a fence, a water trough — so no large area is empty',
-  'one continuous scene with everything standing on the same ground, not separate objects placed on a background',
+  `${what}, seen from above at a slight angle`,
+  // Only the ground and the scenery. Three attempts established that the model
+  // will not hold a layout however firmly it is asked: told to leave every
+  // block where the plan put it, it returned a lovely farm with the field
+  // hotspot sitting on the cottage and the road hotspot on a field. So it is
+  // asked for the part it is good at — a continuous, populated ground — and
+  // everything the game needs to be in an exact place is put there afterwards.
+  'THE PICTURE MUST FILL THE WHOLE RECTANGLE, edge to edge and corner to corner: no white border, no round island, no vignette, no frame',
+  'NO BUILDINGS, NO TILLED FIELDS, NO PLOTS OF BARE EARTH, NO PATHS — those are added later and must not appear here',
+  'just grass with small scenery scattered over it: tufts, clover, daisies, little stones, a fence along one edge, low bushes around the outside',
+  'nothing large, nothing in the middle, nothing that would sit under a building',
+  'even and continuous, the same kind of ground everywhere',
 ].join('. ')
 
 const args = process.argv.slice(2)
