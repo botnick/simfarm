@@ -1140,7 +1140,10 @@ export function checkData(data) {
   }
   // A key beginning with an underscore is a note to whoever edits the file, the
   // convention this whole rule book uses to explain itself. Not a setting.
-  for (const [key, value] of Object.entries(prog.grant ?? prog.grants ?? {})) {
+  // One spelling. Accepting both is what hid the split: the rule book says
+  // `grants`, `farmLimits` reads `grants`, and a check that quietly took either
+  // meant the one place spelling it `grant` was never contradicted by anything.
+  for (const [key, value] of Object.entries(prog.grants ?? {})) {
     if (key.startsWith('_')) continue
     if (!Number.isFinite(value)) problems.push(`levelling grants ${value} of ${key}, which is not a number`)
   }

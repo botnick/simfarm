@@ -73,7 +73,7 @@ server logs what it dropped.
     npm run online       #  70  the game in a browser, against a real server
     npm run test:server  # 189  the server refusing what it should
     npm run facade       #  63  what the browser does with every answer a server can give
-    npm run reach        #  46  every crop, animal, recipe and reward is reachable,
+    npm run reach        #  50  every crop, animal, recipe and reward is reachable,
                          #      and both languages say everything
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
@@ -107,6 +107,15 @@ place by finding something:
 - **`facade`** holds the two halves of the online game to the same list of
   names. An intent the browser sends and the server has never heard of fails as
   a refusal nobody can explain: the button does nothing and nothing is logged.
+- **`reach`** also watches the rule book being read. A misspelled setting is
+  invisible in JavaScript — the read returns nothing, a default takes over, and
+  the answer is confidently wrong — which is how `progression.grant` went on
+  being asked for while the file called it `grants`. The first attempt at this
+  read the source looking for the word, and passed with the bug put back,
+  because the code aliases the object to a local first. So it watches instead:
+  the rule book is wrapped in a proxy, a farm is played hard enough to touch
+  everything, and every key asked for by name is checked against the keys that
+  exist. It found one the moment it worked.
 - **`pace`** answers a question `reach` does not: not *can* this be reached, but
   how many days of playing until it is. It found six of sixteen things
   unreachable inside four months.

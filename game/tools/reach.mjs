@@ -314,5 +314,79 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
     rules.checkData(locked).some(p => p.includes('never start')))
 }
 
+{
+  // Every setting the code reaches for, recorded while it runs.
+  //
+  // This is here because of a misspelling. The code asked for
+  // `progression.grant` while the rule book calls it `grants`, so the read
+  // returned undefined, fell through to a default, and produced a confident
+  // wrong answer: a rule book reported as having no levels while the farm went
+  // on growing every four of them. Nothing failed, because nothing was looking.
+  //
+  // The first version of this read the source and looked for `progression.x`,
+  // and passed with the bug put back — because the code writes
+  // `const prog = data.progression` and then `prog.grants`, which a search for
+  // the word never sees. Reading source cannot survive a rename. Watching the
+  // object can: a proxy is asked for every key by name, including the ones that
+  // are not there, which is exactly the case worth catching.
+  const asked = new Map()
+  const watch = (name, held) => new Proxy(held ?? {}, {
+    get(target, key) {
+      if (typeof key === 'string') {
+        const seen = asked.get(name) ?? new Set()
+        seen.add(key)
+        asked.set(name, seen)
+      }
+      return Reflect.get(target, key)
+    },
+  })
+
+  const watched = {
+    ...data,
+    rules: watch('rules', data.rules),
+    progression: watch('progression', data.progression),
+    meta: watch('meta', data.meta),
+  }
+
+  // A farm played hard enough to touch the settings: growing, feeding, curing,
+  // selling, a night, a week and a level.
+  const s = rules.newGame(watched)
+  s.money = 999999
+  rules.checkData(watched)
+  rules.has(watched)
+  rules.farmLimits(s, watched)
+  rules.nextGrant(s, watched)
+  rules.buySeed(s, watched, data.crops[0].id)
+  rules.plant(s, watched, 0, data.crops[0].id)
+  for (const supply of data.supplies) rules.buySupply(s, watched, supply.id)
+  for (const animal of data.animals) { rules.buyAnimal(s, watched, animal.id); rules.feedAnimals(s, watched, animal.id) }
+  for (const recipe of data.recipes) rules.craft(s, watched, recipe.id)
+  for (let day = 0; day < 40; day++) {
+    rules.waterPlot(s, watched, 0)
+    rules.harvestPlot(s, watched, 0)
+    rules.clearPlot(s, watched, 0)
+    rules.endDay(s, watched, () => 0.5)
+  }
+  rules.sellCrop(s, watched, data.crops[0].id, 1)
+  rules.willAdvanceSimulation(s, watched)
+  rules.reconcile(s, watched)
+
+  for (const [name, keys] of asked) {
+    const held = data[name] ?? {}
+    const missing = [...keys].filter(k => !(k in held))
+    ok(`every ${name} setting the code asks for is one the rule book has`,
+      missing.length === 0, missing.length ? `asked for ${missing.join(', ')}` : '')
+  }
+
+  // And the reverse for the one that caught us: a setting the rule book carries
+  // that nothing ever asks for is either dead weight, or a read spelled
+  // differently somewhere.
+  const touchedProgression = asked.get('progression') ?? new Set()
+  const unread = Object.keys(data.progression ?? {})
+    .filter(k => !k.startsWith('_') && !touchedProgression.has(k))
+  ok('and every progression setting the rule book has is asked for',
+    unread.length === 0, unread.length ? `nothing asks for ${unread.join(', ')}` : '')
+}
+
 console.log(`\n${pass} passed, ${failures.length} failed\n`)
 if (failures.length) { failures.forEach(f => console.error(`  ${f}`)); process.exit(1) }
