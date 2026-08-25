@@ -209,6 +209,34 @@ Two consequences worth knowing:
 
 ---
 
+## When the game breaks
+
+A scene whose `create()` throws is left half-built, and the game carries on
+drawing whatever did get made. What the player sees is a screen that looks
+entirely normal except that nothing on it works.
+
+The game guards its own lifecycle and its own bootstrap — deliberately not
+`window`, because a host's unrelated failure must never put a notice on screen
+blaming the farm. Set this before the script loads to take it over:
+
+    window.SIMFARM = {
+      onFatal({ error, phase, reload }) {
+        // phase is e.g. 'FarmScene.create' or 'loading the game'
+        myTelemetry.report(error, phase)
+        return true          // true or 'handled' suppresses the built-in notice
+      },
+      fatalUI: false,        // or just turn the notice off without replacing it
+    }
+
+Called once per session, whatever breaks and however often. The built-in notice
+says something generic and localised and offers a reload; it never renders the
+error's own text, which carries internal paths and helps nobody. A handler that
+itself throws is ignored rather than being allowed to become the failure.
+
+For real isolation from a host page, run the game in an iframe.
+
+`npm run fatal` covers all of that.
+
 ## Content
 
 `game/public/data/game.json` is the game. Crops, animals, feeds, recipes, tools,
@@ -234,6 +262,7 @@ name rather than an empty space, so a half-translated build is obvious.
     npm run reach        #  21  every crop, animal, recipe and reward is reachable
     npm run pace         #      how many days before each thing becomes available
     npm run durable      #   9  two processes over one ledger, across a restart
+    npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs
     npm run sim          #      the crop balance table

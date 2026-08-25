@@ -220,7 +220,9 @@
     "hud.levelReached": "Level {0}",
     "farm.seasonOver": "SEASON OVER — $ {0}",
     "farm.seasonBest": "your best season yet",
-    "farm.seasonBeat": "your best is $ {0}"
+    "farm.seasonBeat": "your best is $ {0}",
+    "fatal.notice": "Something went wrong and this screen may not work. Reloading usually fixes it.",
+    "fatal.reload": "Reload"
   },
   "th": {
     "lang.name": "ไทย",
@@ -442,6 +444,8 @@
     "hud.levelReached": "เลเวล {0}",
     "farm.seasonOver": "จบฤดูกาล — $ {0}",
     "farm.seasonBest": "ดีที่สุดเท่าที่เคยทำมา",
-    "farm.seasonBeat": "สถิติเดิม $ {0}"
+    "farm.seasonBeat": "สถิติเดิม $ {0}",
+    "fatal.notice": "มีบางอย่างผิดพลาด หน้านี้อาจใช้งานไม่ได้ ลองโหลดใหม่ดูครับ",
+    "fatal.reload": "โหลดใหม่"
   }
 }

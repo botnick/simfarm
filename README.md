@@ -42,6 +42,7 @@ Adding a crop, an animal, a recipe or a milestone is an edit to
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run durable      #   9  two processes over one ledger, across a restart
     npm run pace         #   9  how long before each thing becomes available
+    npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs
     npm run sim          #      the crop balance table

@@ -166,12 +166,15 @@ export default class MarketScene extends Phaser.Scene {
       // Thin, and with the count beside it rather than on it. Full width and
       // pill-shaped, it was the same size and shape as the button underneath and
       // the pair read as two buttons, one of which happened not to work.
-      const count = label(this, x + CARD_W - 11, y + 54, t('market.progress', order.filled, order.quota),
+      // In the same column as the name and the price, not running the full width
+      // underneath the icon. Spanning the card, it lined up with nothing and an
+      // empty one was a long dead tube dominating the card.
+      const count = label(this, x + CARD_W - 11, y + 52, t('market.progress', order.filled, order.quota),
         { size: 9, display: true, color: done ? '#2d5a1e' : '#8a6b18', origin: [1, 0.5] })
-      const bx = x + 11, by = y + 51, bw = CARD_W - 26 - count.displayWidth, bh = 6
+      const bx = x + 52, by = y + 49, bw = (x + CARD_W - 15 - count.displayWidth) - bx, bh = 6
       const bar = this.add.graphics()
-      bar.fillStyle(C.rim, 0.55).fillRoundedRect(bx - 1, by - 1, bw + 2, bh + 2, (bh + 2) / 2)
-      bar.fillStyle(0xd9cbaa, 1).fillRoundedRect(bx, by, bw, bh, bh / 2)
+      bar.fillStyle(C.rim, 0.35).fillRoundedRect(bx - 1, by - 1, bw + 2, bh + 2, (bh + 2) / 2)
+      bar.fillStyle(0xded2b6, 1).fillRoundedRect(bx, by, bw, bh, bh / 2)
       const f = Phaser.Math.Clamp(order.filled / order.quota, 0, 1)
       if (f > 0) {
         const w = Math.max(bh, bw * f)
