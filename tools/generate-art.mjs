@@ -18,33 +18,32 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT = join(HERE, '../generated')
 
-// The house style, measured off the reference art rather than argued about.
+// The house style, in the owner's own production wording.
 //
-// The written guide and the pictures supplied with it disagree. The guide says
-// flat colour and no gradient; the pictures have between sixty and a hundred
-// and fifteen distinct tones inside their shapes, which is shading. Sampling
-// them settled it — and settled two other things words had been failing at:
+// Three attempts guessed at this and each was wrong in a different way. The
+// first copied the original Flash game's flat black outline, which is somebody
+// else's idiom. The second read the supplied icons, saw shading, and produced
+// gradients. The third measured the icons and produced gradients with more
+// conviction.
 //
-//   their outline is 23-29% of the drawing, and mine was 10.7%
-//   their outline is #271409 to #572d14, darker than the #4a3222 in the guide
+// The answer was in their own toolkit all along, and it reconciles the guide
+// with the pictures in five words: "flat colors, no gradients, glossy simple
+// highlights". Not shading — flat colour with a gloss shape laid on top. That
+// is why the icons look rendered while the guide says flat, and both are right.
 //
-// So the pictures win on finish and weight, the guide wins on palette and
-// shape, and the numbers are stated here rather than described.
-//
-// The size lines stay: the model draws at 1024 and the game shows about 80.
+// Their rule about resolution is taken too, and it is the same lesson learned
+// the hard way here: the art is drawn large and shown small, so it has to be
+// drawn to survive the shrink.
 const STYLE = [
-  'cute chunky cartoon game asset, warm and friendly, polished mobile game quality',
-  'VERY THICK dark warm brown outline, colour #2e1608, never black and never grey — the outline should take up about a quarter of the whole drawing, far thicker than looks normal',
-  'smooth shading inside each shape, a darker warm tone gathering along the inside of the outline and a soft light on top, giving real roundness',
-  'a small crisp glossy highlight on each curved surface',
-  'round chubby forms, no sharp corners anywhere',
-  'warm saturated palette — leaf greens #6fb54a and #5da03f, cream #f7e7c5, warm brown #a5683c, orange #f2a541',
-  'bold and simple: six or seven large shapes in the whole drawing, no fine detail, no thin lines, no hatching',
-  'seen from above at a slight angle, wide low silhouette',
+  'cute doodle cartoon game asset',
+  'dark-brown outlines (#4a3222), flat warm colors, no gradients, glossy simple highlights, rounded chubby shapes',
+  'top-down slightly angled view, plain pure white background',
+  'leaf greens #6fb54a and #5da03f, cream #f7e7c5, warm brown #a5683c, orange #f2a541',
+  'crisp clean line art, every shape sharp and fully drawn — this art is downscaled to a small in-game size later, so it must still read clearly at 80 pixels wide',
+  'keep the line weight identical everywhere in the picture',
+  'bold and simple: six or seven large shapes, no fine detail, no thin lines, no hatching',
   'a soft dark elliptical shadow on the ground beneath it',
-  'IT MUST STILL READ CLEARLY WHEN SHRUNK TO 80 PIXELS WIDE — draw it bold enough for that',
-  'pure white background, nothing else in frame, no text, no border, no watermark, no frame',
-  'match the outline weight, outline colour and finish of the attached reference exactly — this belongs beside it',
+  'nothing else in frame, no text, no border, no watermark, no frame',
 ].join(', ')
 
 const env = Object.fromEntries(
