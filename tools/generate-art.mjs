@@ -65,11 +65,12 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms))
  * asking for something like it produces a derivative of that sprite, which is
  * the exact thing this whole exercise exists to avoid.
  *
- * The reference here is the project owner's own work, supplied as the look this
- * game should share. It anchors the outline colour, the shading and the gloss,
- * which words alone kept failing to pin down.
+ * The owner's own finished art, out of their toolkit: a single object rather
+ * than a character, which is what a crop is. It shows the treatment their
+ * wording describes — flat colour with a gloss laid on top, not shading — and
+ * pins down the one thing words kept failing at.
  */
-const REFERENCE = join(HERE, '../generated/_style/trophy.png')
+const REFERENCE = join(HERE, '../generated/_style/object-anchor.png')
 
 async function draw(name, subject) {
   const body = new FormData()
