@@ -283,6 +283,14 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok('and something with no name in one of the two languages',
     rules.checkData(nameless).some(p => p.includes('no th name')))
 
+  // The scene builds this cue's name out of the animal's id, so nothing that
+  // reads the source can see it — renaming an animal, or adding one, takes its
+  // sound away with no error anywhere. This is the only place that can say so.
+  const mute = structuredClone(data)
+  mute.animals[0].id = 'llama'
+  ok('and an animal whose noise nothing names',
+    rules.checkData(mute).some(p => p.includes('animal-llama')))
+
   const toolless = structuredClone(data)
   toolless.tools = toolless.tools.filter(t => t.id !== 'clear')
   ok('and a rule book with no way to clear withered ground',

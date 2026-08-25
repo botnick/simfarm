@@ -1138,6 +1138,17 @@ export function checkData(data) {
     if (!has('tools', toolId)) problems.push(`there is a sound for using "${toolId}", and no such tool`)
     if (!sounds.has(cue)) problems.push(`using "${toolId}" plays "${cue}", which is not one of the sounds`)
   }
+  // Every animal makes its own noise when it is fed, and the scene builds that
+  // cue's name from the animal's id rather than writing it out — so nothing
+  // that reads the source can see it. A book that renames an animal, or adds
+  // one, loses its sound with no error and no warning anywhere. This is the
+  // only place that can tell.
+  for (const a of data.animals ?? []) {
+    if (!a?.id) continue
+    if (!sounds.has(`animal-${a.id}`)) {
+      problems.push(`feeding "${a.id}" plays "animal-${a.id}", which is not one of the sounds`)
+    }
+  }
   // Music is loaded alongside the effects rather than listed among them, so the
   // only thing to check here is that a place names something at all — whether
   // the file is there is a question about the folder, and `reach` asks it.
