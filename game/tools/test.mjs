@@ -134,6 +134,52 @@ const fresh = (level = null) => {
 }
 
 {
+  // What a rule book actually contains, for the screens to ask before they
+  // offer it. The game grew three systems the original did not have — a
+  // workshop, a market board, and levels to unlock things at — and all three
+  // are data. Take the data away and the code would still show the door: a
+  // house opening an empty workshop, a MARKET button onto a board with nothing
+  // on it, a plaque counting towards a level that grants nothing.
+  const whole = rules.has(data)
+  eq('the rule book this build ships has a workshop', whole.workshop, true)
+  eq('and a market board', whole.market, true)
+  eq('and levels worth showing', whole.levels, true)
+
+  const plain = structuredClone(data)
+  plain.recipes = []
+  eq('a rule book with no recipes has no workshop', rules.has(plain).workshop, false)
+
+  const unpriced = structuredClone(data)
+  unpriced.rules.market.orderCount = 0
+  eq('and a week with no orders in it is not a market', rules.has(unpriced).market, false)
+
+  // Levelling is worth showing while it can still change something. Each of
+  // these on its own is enough, which is why it is derived rather than declared:
+  // a flag saying "no levels" could disagree with a crop that waits for one.
+  const flat = structuredClone(data)
+  flat.crops = flat.crops.map(c => ({ ...c, unlockLevel: 1 }))
+  flat.animals = flat.animals.map(a => ({ ...a, unlockLevel: 1 }))
+  flat.milestones = []
+  flat.progression.milestoneEvery = 0
+  for (const key of Object.keys(flat.progression.grant ?? {})) {
+    if (!key.startsWith('_')) flat.progression.grant[key] = 0
+  }
+  eq('a game where levelling changes nothing does not show a level', rules.has(flat).levels, false)
+
+  const gated = structuredClone(flat)
+  gated.crops[1].unlockLevel = 4
+  eq('one crop waiting on a level is enough to show it', rules.has(gated).levels, true)
+
+  const rewarded = structuredClone(flat)
+  rewarded.milestones = [{ id: 'x', when: 'level', level: 3, name: { en: 'X', th: 'X' } }]
+  eq('so is one reward listed against one', rules.has(rewarded).levels, true)
+
+  const growing = structuredClone(flat)
+  growing.progression.grant = { ...growing.progression.grant, energy: 4 }
+  eq('and so is a farm that grows with it', rules.has(growing).levels, true)
+}
+
+{
   // A farm saved before somebody edited the game's data. Adding or removing a
   // crop is documented as an edit to one JSON file, and a save outlives it.
   // Growing something the game no longer has used to end the game outright: the

@@ -894,6 +894,36 @@ export function travel(state, data) {
  *
  * Returns a list of plain sentences, empty when the book hangs together.
  */
+/**
+ * What a rule book actually contains, for the screens to ask before they offer
+ * it.
+ *
+ * The game grew three systems the original did not have — a workshop, a market
+ * board, and levels to unlock things at — and all three are data. Take the data
+ * away and the code would still show the door: a house that opens an empty
+ * workshop, a MARKET button onto a board with nothing on it, a plaque counting
+ * towards a level that grants nothing. So the screens ask here instead of
+ * assuming, and a rule book with none of it is simply a game without it rather
+ * than a game with three dead ends.
+ *
+ * Everything is derived rather than declared. A flag saying "no workshop" could
+ * disagree with a list of recipes; a list of recipes cannot disagree with
+ * itself.
+ */
+export function has(data) {
+  const listed = data.milestones ?? []
+  const gated = [...(data.crops ?? []), ...(data.animals ?? [])].some(x => (x.unlockLevel ?? 1) > 1)
+  const grants = Object.entries(data.progression?.grant ?? {})
+    .some(([key, value]) => !key.startsWith('_') && value)
+  return {
+    workshop: (data.recipes ?? []).length > 0,
+    market: (data.rules?.market?.orderCount ?? 0) > 0,
+    // Levelling is worth showing when it can still change something: a crop or
+    // an animal waiting on it, a reward listed against it, or a farm that grows.
+    levels: gated || listed.length > 0 || grants || (data.progression?.milestoneEvery ?? 0) > 0,
+  }
+}
+
 export function checkData(data) {
   const problems = []
 

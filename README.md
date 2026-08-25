@@ -30,6 +30,15 @@ transport can import it directly and leave `server/` alone.
 Adding a crop, an animal, a recipe or a milestone is an edit to
 `game/public/data/game.json`. Nothing in the code holds a list of them.
 
+Taking them away is an edit to the same file, and the screens ask before they
+offer anything: a rule book with no recipes has no workshop door on the farm, a
+week with no orders is not a market, and a game where levelling cannot change
+anything does not show a level. All three are derived from the data rather than
+declared, because a flag saying "no workshop" can disagree with a list of
+recipes and a list of recipes cannot disagree with itself. The original Flash
+game had none of the three — eight crops, one chicken, and a year to play it in
+— so that shape is a data file away.
+
 A farm saved before such an edit outlives it, so both halves of the game
 reconcile a save against the rule book they are about to play it under. Anything
 that no longer exists is dropped, and a field growing a crop that was removed is

@@ -3,7 +3,7 @@ import { C, button, fitCamera, label, money, panel, toast } from '../ui/kit.js'
 import { WIDTH, HEIGHT } from '../main.js'
 import { banner, enter } from '../ui/fx.js'
 import { playMusic, sfx } from '../core/audio.js'
-import { animalRoom, cropById, farmLimits, goodCount, nextGrant, totalCrops } from '../core/rules.js'
+import { animalRoom, cropById, farmLimits, goodCount, has, nextGrant, totalCrops } from '../core/rules.js'
 import { backdrop, centreOf, regions } from '../ui/stage.js'
 import { makeHud } from '../ui/hud.js'
 import { save } from '../core/save.js'
@@ -34,7 +34,7 @@ export default class FarmScene extends Phaser.Scene {
 
     backdrop(this, 'scene:farm')
     this.rainLayer = this.add.container(0, 0).setDepth(500)
-    this.hud = makeHud(this, 15, { day: true, level: true })
+    this.hud = makeHud(this, 15, { day: true, level: has(this.data_).levels })
 
     const hits = regions(this, 15)
     this.marks = []
@@ -43,7 +43,9 @@ export default class FarmScene extends Phaser.Scene {
         () => this.scene.start('Plot', { plotIndex: i }), 0.62))
     }
     this.hotspot(hits, 'goto:coop', t('farm.coop'), () => this.scene.start('Coop'))
-    this.hotspot(hits, 'goto:house', t('farm.workshop'), () => this.scene.start('Workshop'))
+    // The house only opens onto something when the rule book has recipes in it.
+    // Offering a door to an empty room is worse than no door.
+    if (has(this.data_).workshop) this.hotspot(hits, 'goto:house', t('farm.workshop'), () => this.scene.start('Workshop'))
     this.hotspot(hits, 'goto:village', t('farm.shop', this.data_.meta.shopName), () => this.toShop())
 
     // These sit on top of the road, which is also the way to the village, so they
@@ -60,7 +62,7 @@ export default class FarmScene extends Phaser.Scene {
       Enter: () => this.nextDay(),
       ' ': () => this.nextDay(),
       c: () => this.scene.start('Coop'),
-      k: () => this.scene.start('Workshop'),
+      k: () => { if (has(this.data_).workshop) this.scene.start('Workshop') },
       v: () => this.toShop(),
       m: () => this.scene.start('Market'),
       1: () => this.scene.start('Plot', { plotIndex: 0 }),

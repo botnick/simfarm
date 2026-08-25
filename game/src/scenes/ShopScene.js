@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { C, art, button, fitCamera, label, money, panel, toast } from '../ui/kit.js'
 import { WIDTH, HEIGHT } from '../main.js'
 import { coins, enter, stagger } from '../ui/fx.js'
-import { animalRoom, cropCount, goodCount, levelOf, unitPrice, quoteCrop } from '../core/rules.js'
+import { animalRoom, cropCount, goodCount, has, levelOf, unitPrice, quoteCrop } from '../core/rules.js'
 import { openOrder } from '../core/market.js'
 import { backdrop } from '../ui/stage.js'
 import { makeHud } from '../ui/hud.js'
@@ -38,7 +38,7 @@ export default class ShopScene extends Phaser.Scene {
     this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.3).setOrigin(0)
     // The shop's money panel owns the top-left corner, so the level plaque sits
     // beside it rather than on top of it.
-    this.hud = makeHud(this, 55, { day: true, dayAt: { x: 392, y: 8 }, level: true, levelAt: { x: 214, y: 6 } })
+    this.hud = makeHud(this, 55, { day: true, dayAt: { x: 392, y: 8 }, level: has(this.data_).levels, levelAt: { x: 214, y: 6 } })
 
     panel(this, 14, 74, WIDTH - 28, 312, { alpha: 0.97 })
     const tabs = [['seeds', t('shop.seeds')], ['supplies', t('shop.supplies')], ['animals', t('shop.animals')], ['sell', t('shop.sell')]]
@@ -50,10 +50,11 @@ export default class ShopScene extends Phaser.Scene {
     button(this, WIDTH - 86, HEIGHT - 24, 150, 30, t('shop.backFarm'), () => this.scene.start('Farm'), { tone: 'wood', size: 12 })
     // The market board lives in the village too, and it is the only place the
     // saturation and order rules are visible.
-    button(this, 92, HEIGHT - 24, 140, 30, t('market.open'), () => this.scene.start('Market'), { tone: 'gold', size: 12 })
+    // Same for the board: a week with no orders on it is not a market.
+    if (has(this.data_).market) button(this, 92, HEIGHT - 24, 140, 30, t('market.open'), () => this.scene.start('Market'), { tone: 'gold', size: 12 })
     this.render()
 
-    bindKeys(this, { Escape: () => this.scene.start('Farm'), m: () => this.scene.start('Market') })
+    bindKeys(this, { Escape: () => this.scene.start('Farm'), m: () => { if (has(this.data_).market) this.scene.start('Market') } })
 
     // Opening a screen is the moment to make sure what is drawn is what the
     // authority actually holds.
