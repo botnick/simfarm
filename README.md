@@ -37,7 +37,11 @@ anything does not show a level. All three are derived from the data rather than
 declared, because a flag saying "no workshop" can disagree with a list of
 recipes and a list of recipes cannot disagree with itself. The original Flash
 game had none of the three — eight crops, one chicken, and a year to play it in
-— so that shape is a data file away.
+— so that shape is a data file away, and `npm run faithful` plays it to prove
+that is true rather than merely intended: it builds that rule book out of this
+one, serves the built game with it in place, and plays a farm from the first seed
+to the end of the year. A door correctly not drawn is only half of it; the farm
+still has to be a farm afterwards.
 
 A farm saved before such an edit outlives it, so both halves of the game
 reconcile a save against the rule book they are about to play it under. Anything
@@ -66,6 +70,7 @@ server logs what it dropped.
     npm run pace         #   9  how long before each thing becomes available
     npm run fuzz         #   5  a farm played at random for years, still a farm
     npm run production   #  21  the built game, a strict server, across origins
+    npm run faithful     #  23  the same game with the rule book the original had
     npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs

@@ -1104,7 +1104,10 @@ export function checkData(data) {
   if (!Number.isFinite(prog.thresholdFactor) || prog.thresholdFactor <= 0) {
     problems.push(`experience is scaled by ${prog.thresholdFactor}, which is not a number to multiply by`)
   }
-  if (prog.milestoneEvery != null && !(Number.isSafeInteger(prog.milestoneEvery) && prog.milestoneEvery > 0)) {
+  // Zero is how a rule book says it does not want them, and the rule that hands
+  // them out already reads it that way. Refusing it here meant a book that had
+  // switched them off was refused for switching them off.
+  if (prog.milestoneEvery != null && !(Number.isSafeInteger(prog.milestoneEvery) && prog.milestoneEvery >= 0)) {
     problems.push(`a milestone every ${prog.milestoneEvery} levels is not a number of levels`)
   }
   // A key beginning with an underscore is a note to whoever edits the file, the

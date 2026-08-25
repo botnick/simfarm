@@ -28,7 +28,8 @@
     "pace": "node tools/pace.mjs",
     "fatal": "node tools/fatal.mjs",
     "fuzz": "node tools/fuzz.mjs",
-    "production": "node tools/production.mjs"
+    "production": "node tools/production.mjs",
+    "faithful": "node tools/faithful.mjs"
   },
   "keywords": [],
   "author": "",
