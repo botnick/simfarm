@@ -50,12 +50,32 @@ function faithful(full) {
   d.recipes = []
   d.supplies = d.supplies.filter(s => ['fertilizer', 'pesticide', 'grain'].includes(s.id))
   d.rules.market.orderCount = 0
+  // Taking the orders away is not the same as taking the market away. Selling
+  // the same crop over and over still walked the price tiers, so the price
+  // still fell — with the board hidden, and with it the only screen that
+  // explains why. The original had one price per crop and kept it, which is one
+  // tier that never steps down.
+  d.rules.market.tiers = [{ upTo: null, multiplier: 1 }]
   d.rules.endDay = 365                       // "manage your farm field in 1 year"
   d.milestones = []
   d.progression.milestoneEvery = 0
-  for (const key of Object.keys(d.progression.grant ?? {})) {
-    if (!key.startsWith('_')) d.progression.grant[key] = 0
+  // `grants`, plural — which is what the rule book calls it and what
+  // `farmLimits` reads. Zeroing a `grant` that does not exist left the farm
+  // growing four energy every four levels in a rule book that was supposed to
+  // have no levels at all, and this suite reported it as having none while it
+  // quietly did.
+  for (const key of Object.keys(d.progression.grants ?? {})) {
+    if (!key.startsWith('_')) d.progression.grants[key] = 0
   }
+  return d
+}
+
+/** A farm with nothing to keep: crops only, no coop, no workshop, no board. */
+function cropsOnly(full) {
+  const d = faithful(full)
+  d.animals = []
+  d.goods = []
+  d.supplies = d.supplies.filter(x => ['fertilizer', 'pesticide'].includes(x.id))
   return d
 }
 
@@ -66,7 +86,7 @@ console.log('\nfaithful: the game with the rule book the original shipped with\n
 
 // A rule book the server would refuse is not a rule book, whatever it leaves out.
 eq('the reduced rule book hangs together', checkData(book), [])
-eq('and the screens know what it has', has(book), { workshop: false, market: false, levels: false })
+eq('and the screens know what it has', has(book), { workshop: false, market: false, animals: true, levels: false })
 eq('eight crops', book.crops.length, 8)
 eq('one animal', book.animals.map(a => a.id), ['chicken'])
 eq('and a year to play it in', book.rules.endDay, 365)
@@ -153,6 +173,24 @@ eq('nor does the key for it', await scene(), 'Shop')
 await page.screenshot({ path: 'shots/faithful-shop.png' })
 
 // And then the part that matters: it is still a farm.
+// The farm does not quietly grow. `farmLimits` reads the grants, and zeroing
+// them in the rule book has to mean the day stays the size it started.
+const dayOne = await read('JSON.stringify(g.__rules.farmLimits(s, d))')
+await poke('s.xp = 100000')
+eq('a farm with nothing to level for does not grow anyway',
+  await read('JSON.stringify(g.__rules.farmLimits(s, d))'), dayOne)
+await poke('s.xp = 0')
+
+// One price per crop, kept. With the board hidden, a price that fell would fall
+// with nothing on any screen to explain it.
+const priced = await read(`(() => {
+  const id = d.crops[0].id
+  const one = g.__rules.quoteCrop(s, d, id, 1).total
+  const forty = g.__rules.quoteCrop(s, d, id, 40).total
+  return { one, forty, flat: forty === one * 40 }
+})()`)
+ok('and the price does not fall however much is sold', priced.flat, JSON.stringify(priced))
+
 const before = await read('s.money')
 await click(1032 * W / 1200, 289 * H / 840, 800)
 ok('a seed can be bought', await read('s.money') < before, `${before} -> ${await read('s.money')}`)
@@ -190,7 +228,68 @@ await click(522, 394, 1400)
 eq('and the year comes to an end', await scene(), 'End')
 await page.screenshot({ path: 'shots/faithful-end.png' })
 
-ok('no console errors in the whole run', errors.length === 0, [...new Set(errors)].join(' | '))
+ok('no console errors so far', errors.length === 0, [...new Set(errors)].join(' | '))
+
+/* ------------------------------------------ and a farm with nothing to keep */
+// The reduction somebody reusing this is most likely to want next: crops only.
+// The coop is data as much as the workshop is, and leaving it in place gave a
+// door onto an empty room, a tab selling nothing, and a line on the farm
+// counting a herd that could not exist.
+{
+  const only = cropsOnly(full)
+  eq('a crops-only rule book hangs together', checkData(only), [])
+  eq('and the screens know there is no flock', has(only).animals, false)
+  await writeFile(join(dir, 'data/game.json'), JSON.stringify(only))
+
+  const p2 = await browser.newPage()
+  await p2.setViewport({ width: 1200, height: 840 })
+  const said = []
+  p2.on('pageerror', e => said.push(`pageerror: ${e.message}`))
+  p2.on('console', m => { if (m.type() === 'error' && !m.text().includes('favicon')) said.push(m.text().slice(0, 160)) })
+  await p2.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', ''))
+  await p2.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+  await new Promise(r => setTimeout(r, 2600))
+  const b2 = await p2.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+  const tap = async (sx, sy, wait = 700) => {
+    await p2.mouse.click(b2.x + b2.w * (sx / W), b2.y + b2.h * (sy / H))
+    await new Promise(r => setTimeout(r, wait))
+  }
+  const where = () => p2.evaluate(() => window.__game.scene.scenes.filter(x => x.scene.isActive()).map(x => x.scene.key).join('+'))
+  const words = () => p2.evaluate(() => {
+    const out = []
+    for (const sc of window.__game.scene.scenes) {
+      if (!sc.scene.isActive()) continue
+      sc.children.list.forEach(o => { if (o.type === 'Text' && o.visible && o.text) out.push(o.text) })
+    }
+    return out
+  })
+
+  await tap(208, 284, 1200)
+  eq('a farm with no flock opens', await where(), 'Farm')
+  const onIt = await words()
+  ok('and says nothing about a herd', !onIt.some(x => /animals|สัตว์/i.test(x)), JSON.stringify(onIt))
+  await tap(337, 31, 800)                                     // where the coop was
+  eq('the coop is not there to walk into', await where(), 'Farm')
+  await p2.keyboard.press('KeyC')
+  await new Promise(r => setTimeout(r, 600))
+  eq('nor reachable by its key', await where(), 'Farm')
+
+  await tap(420, 300, 900)
+  eq('the village opens', await where(), 'Shop')
+  const shopWords = await words()
+  ok('and sells no animals', !shopWords.some(x => /^ANIMALS$|^สัตว์เลี้ยง$/i.test(x)), JSON.stringify(shopWords))
+  await p2.screenshot({ path: 'shots/faithful-crops-only.png' })
+
+  // Still a farm.
+  const had = await p2.evaluate(() => window.__game.registry.get('state').money)
+  await tap(1032 * W / 1200, 289 * H / 840, 800)
+  ok('a seed can still be bought', await p2.evaluate(() => window.__game.registry.get('state').money) < had)
+  await tap(524, 396, 700)
+  await tap(158, 263, 800)
+  eq('and a field still opens', await where(), 'Plot')
+  ok('no console errors with no flock', said.length === 0, [...new Set(said)].join(' | '))
+  await p2.close()
+}
 
 await browser.close()
 site.close()

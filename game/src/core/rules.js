@@ -911,16 +911,44 @@ export function travel(state, data) {
  * itself.
  */
 export function has(data) {
-  const listed = data.milestones ?? []
+  const prog = data.progression ?? {}
+  const animals = (data.animals ?? []).length > 0
+
+  // Every way a level can matter, and all of them need experience to be
+  // gainable at all — a farm that can never earn a point has a level, it just
+  // has the same one for ever.
+  const canEarn = Object.entries(prog.xp ?? {})
+    .some(([key, value]) => !key.startsWith('_') && value > 0)
+  // Something waiting on a level to arrive.
   const gated = [...(data.crops ?? []), ...(data.animals ?? [])].some(x => (x.unlockLevel ?? 1) > 1)
-  const grants = Object.entries(data.progression?.grant ?? {})
-    .some(([key, value]) => !key.startsWith('_') && value)
+  // A reward listed against one. `when` matters: a first-harvest milestone is
+  // not a reason to show a level, and counting every milestone put a plaque on
+  // screen for a farm that had nothing to level towards.
+  const rewarded = (data.milestones ?? []).some(m => m?.when === 'level')
+    || (prog.milestoneEvery ?? 0) > 0
+  // A farm that grows with it. `every` is how often, not what for, and
+  // `barnSoftCapMax` is a ceiling on one of the others — neither is a thing the
+  // player gets, so a rule book granting nothing but those grants nothing.
+  //
+  // The spelling is `grants`, which is what the rule book and `farmLimits` both
+  // use. Reading `grant` here meant this never saw the real ones: a rule book
+  // could be reported as having no levels while the farm quietly went on
+  // growing every four of them.
+  const BOOKKEEPING = new Set(['every', 'barnSoftCapMax'])
+  const grows = Object.entries(prog.grants ?? {}).some(([key, value]) => {
+    if (key.startsWith('_') || BOOKKEEPING.has(key)) return false
+    if (key === 'animalMax' && !animals) return false     // room for a herd that cannot exist
+    return Number.isFinite(value) && value !== 0
+  }) && (prog.grants?.every ?? 0) > 0
+
   return {
     workshop: (data.recipes ?? []).length > 0,
     market: (data.rules?.market?.orderCount ?? 0) > 0,
-    // Levelling is worth showing when it can still change something: a crop or
-    // an animal waiting on it, a reward listed against it, or a farm that grows.
-    levels: gated || listed.length > 0 || grants || (data.progression?.milestoneEvery ?? 0) > 0,
+    // A rule book with nothing to keep is a farm that only grows things — which
+    // is a game somebody might well want, and was leaving a door onto an empty
+    // coop, a tab selling nothing, and a line counting a herd that cannot exist.
+    animals,
+    levels: canEarn && (gated || rewarded || grows),
   }
 }
 

@@ -156,13 +156,16 @@ const fresh = (level = null) => {
   // Levelling is worth showing while it can still change something. Each of
   // these on its own is enough, which is why it is derived rather than declared:
   // a flag saying "no levels" could disagree with a crop that waits for one.
+  // The spelling is `grants`, which is what the rule book and `farmLimits` both
+  // use. Reading `grant` here meant this never saw the real ones — a rule book
+  // reported as having no levels while the farm went on growing every four.
   const flat = structuredClone(data)
   flat.crops = flat.crops.map(c => ({ ...c, unlockLevel: 1 }))
   flat.animals = flat.animals.map(a => ({ ...a, unlockLevel: 1 }))
   flat.milestones = []
   flat.progression.milestoneEvery = 0
-  for (const key of Object.keys(flat.progression.grant ?? {})) {
-    if (!key.startsWith('_')) flat.progression.grant[key] = 0
+  for (const key of Object.keys(flat.progression.grants ?? {})) {
+    if (!key.startsWith('_')) flat.progression.grants[key] = 0
   }
   eq('a game where levelling changes nothing does not show a level', rules.has(flat).levels, false)
 
@@ -174,9 +177,39 @@ const fresh = (level = null) => {
   rewarded.milestones = [{ id: 'x', when: 'level', level: 3, name: { en: 'X', th: 'X' } }]
   eq('so is one reward listed against one', rules.has(rewarded).levels, true)
 
+  // A milestone that is not about levels is not a reason to show one. Counting
+  // every milestone put a plaque in front of a farm with nothing to level for.
+  const picked = structuredClone(flat)
+  picked.milestones = [{ id: 'first-harvest', when: 'harvest', name: { en: 'X', th: 'X' } }]
+  eq('a milestone that is not about levels is not one', rules.has(picked).levels, false)
+
   const growing = structuredClone(flat)
-  growing.progression.grant = { ...growing.progression.grant, energy: 4 }
-  eq('and so is a farm that grows with it', rules.has(growing).levels, true)
+  growing.progression.grants = { ...growing.progression.grants, every: 4, energy: 4 }
+  eq('and a farm that grows with the level is', rules.has(growing).levels, true)
+
+  // How often is not what for, and a ceiling on a grant is not a grant.
+  const bookkeeping = structuredClone(flat)
+  bookkeeping.progression.grants = { every: 4, barnSoftCapMax: 3, energy: 0, barnSoftCap: 0, animalMax: 0 }
+  eq('granting nothing but bookkeeping grants nothing', rules.has(bookkeeping).levels, false)
+
+  // Room for a herd that cannot exist is not a benefit either.
+  const herdless = structuredClone(flat)
+  herdless.animals = []
+  herdless.progression.grants = { every: 4, energy: 0, barnSoftCap: 0, animalMax: 2 }
+  eq('room for animals a rule book does not have is not a reason', rules.has(herdless).levels, false)
+
+  // And a level nobody can reach is a number that never changes.
+  const unearnable = structuredClone(data)
+  for (const key of Object.keys(unearnable.progression.xp ?? {})) {
+    if (!key.startsWith('_')) unearnable.progression.xp[key] = 0
+  }
+  eq('a farm that can never earn a point does not show a level', rules.has(unearnable).levels, false)
+
+  // The flock is data as much as the rest of it.
+  const nothingToKeep = structuredClone(data)
+  nothingToKeep.animals = []
+  eq('a rule book with nothing to keep has no flock', rules.has(nothingToKeep).animals, false)
+  eq('and the one that ships does', rules.has(data).animals, true)
 }
 
 {

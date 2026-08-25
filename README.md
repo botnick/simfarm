@@ -35,7 +35,18 @@ offer anything: a rule book with no recipes has no workshop door on the farm, a
 week with no orders is not a market, and a game where levelling cannot change
 anything does not show a level. All three are derived from the data rather than
 declared, because a flag saying "no workshop" can disagree with a list of
-recipes and a list of recipes cannot disagree with itself. The original Flash
+recipes and a list of recipes cannot disagree with itself. The flock is the same: a rule book with no animals in it is a farm that only
+grows things, and the coop door, its key, the shop tab and the herd line all go
+with them.
+
+Four things are **not** data, and pretending otherwise would be the more
+expensive lie: the farm is four fields of twelve tiles because there are four
+field screens and twelve marked positions on each; the field screen is built
+around five named tools; and the scenery still has a coop and a house painted
+into it whether or not anything opens. Functional absence is data-driven, visual
+absence is not.
+
+The original Flash
 game had none of the three — eight crops, one chicken, and a year to play it in
 — so that shape is a data file away, and `npm run faithful` plays it to prove
 that is true rather than merely intended: it builds that rule book out of this
@@ -70,7 +81,7 @@ server logs what it dropped.
     npm run pace         #   9  how long before each thing becomes available
     npm run fuzz         #   5  a farm played at random for years, still a farm
     npm run production   #  21  the built game, a strict server, across origins
-    npm run faithful     #  23  the same game with the rule book the original had
+    npm run faithful     #  36  the same game reduced: the original's book, and crops only
     npm run fatal        #  17  what the game does when it breaks, and does not do
     npm run mobile       #   4  both orientations
     npm run regions      #      every screen has the hotspots it needs

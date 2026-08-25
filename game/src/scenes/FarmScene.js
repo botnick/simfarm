@@ -42,7 +42,7 @@ export default class FarmScene extends Phaser.Scene {
       this.marks.push(this.hotspot(hits, `goto:field${i + 1}`, t('farm.field', i + 1),
         () => this.scene.start('Plot', { plotIndex: i }), 0.62))
     }
-    this.hotspot(hits, 'goto:coop', t('farm.coop'), () => this.scene.start('Coop'))
+    if (has(this.data_).animals) this.hotspot(hits, 'goto:coop', t('farm.coop'), () => this.scene.start('Coop'))
     // The house only opens onto something when the rule book has recipes in it.
     // Offering a door to an empty room is worse than no door.
     if (has(this.data_).workshop) this.hotspot(hits, 'goto:house', t('farm.workshop'), () => this.scene.start('Workshop'))
@@ -61,10 +61,10 @@ export default class FarmScene extends Phaser.Scene {
     bindKeys(this, {
       Enter: () => this.nextDay(),
       ' ': () => this.nextDay(),
-      c: () => this.scene.start('Coop'),
+      c: () => { if (has(this.data_).animals) this.scene.start('Coop') },
       k: () => { if (has(this.data_).workshop) this.scene.start('Workshop') },
       v: () => this.toShop(),
-      m: () => this.scene.start('Market'),
+      m: () => { if (has(this.data_).market) this.scene.start('Market') },
       1: () => this.scene.start('Plot', { plotIndex: 0 }),
       2: () => this.scene.start('Plot', { plotIndex: 1 }),
       3: () => this.scene.start('Plot', { plotIndex: 2 }),
@@ -187,7 +187,7 @@ export default class FarmScene extends Phaser.Scene {
         .map(x => `${tx(x.name)} ${s.supplies[x.id] ?? 0}`)
         .join(' · '),
       feeds,
-      t('farm.herdLine', kept, capacity, produce),
+      ...(has(this.data_).animals ? [t('farm.herdLine', kept, capacity, produce)] : []),
       `${t('farm.stored', totalCrops(s))} · ${curing ? t('farm.curing', curing) : t('farm.nothingCuring')}`,
     ].join('\n'))
 

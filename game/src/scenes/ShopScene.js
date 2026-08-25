@@ -41,7 +41,16 @@ export default class ShopScene extends Phaser.Scene {
     this.hud = makeHud(this, 55, { day: true, dayAt: { x: 392, y: 8 }, level: has(this.data_).levels, levelAt: { x: 214, y: 6 } })
 
     panel(this, 14, 74, WIDTH - 28, 312, { alpha: 0.97 })
-    const tabs = [['seeds', t('shop.seeds')], ['supplies', t('shop.supplies')], ['animals', t('shop.animals')], ['sell', t('shop.sell')]]
+    // A tab is only offered for something the rule book actually has. SELL is
+    // always there: an empty barn is a thing the player can be told about, and
+    // a barn is not a collection the rule book can leave out.
+    const stock = has(this.data_)
+    const tabs = [
+      ...((this.data_.crops ?? []).length ? [['seeds', t('shop.seeds')]] : []),
+      ...((this.data_.supplies ?? []).length ? [['supplies', t('shop.supplies')]] : []),
+      ...(stock.animals ? [['animals', t('shop.animals')]] : []),
+      ['sell', t('shop.sell')],
+    ]
     this.tabBtns = tabs.map(([id, name], i) =>
       ({ id, btn: button(this, 88 + i * 142, 94, 132, 26, name, () => { this.tab = id; this.page = 0; this.render() }, { size: 11 }) }))
 
