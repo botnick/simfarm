@@ -19,10 +19,29 @@ import { owned } from '../core/fatal.js'
  * back and let the boundary see it.
  */
 export function whileHere(scene, farm, after) {
-  const token = (scene.__syncToken = (scene.__syncToken ?? 0) + 1)
-  const gone = () => scene.__syncToken !== token || !scene.scene?.isActive?.()
-  scene.events.once('shutdown', () => { scene.__syncToken = (scene.__syncToken ?? 0) + 1 })
+  // The token names this showing of the screen, not this request. Bumping it per
+  // call meant two refreshes in flight would cancel the first — and the first is
+  // the one that might carry the newer farm, since answers do not come back in
+  // the order they were asked for. Dropping it left the screen drawn at an older
+  // revision than the farm it was drawing. Both callbacks are welcome: each one
+  // renders the farm as it stands by the time it runs, and the facade already
+  // refuses to adopt an older one.
+  const token = (scene.__showing ??= 1)
+  const gone = () => scene.__showing !== token || !scene.scene?.isActive?.()
   return Promise.resolve(farm?.sync?.())
     .then(owned(() => { if (!gone()) after() }, `${scene.scene?.key ?? 'a screen'} refreshing`))
-    .catch(() => { /* the refusal is already the farm's to report */ })
+    // Both things that can fail here have already been reported by the time they
+    // get this far: a refusal from the network is the farm's to announce, and a
+    // fault in the render was handed to the boundary by `owned` just above. This
+    // stops the same failure arriving a second time as an unhandled rejection.
+    .catch(() => {})
+}
+
+/**
+ * Called when a screen opens. Anything still waiting from the last time this
+ * screen was shown belongs to that showing, and is dropped when it lands.
+ */
+export function nowShowing(scene) {
+  scene.__showing = (scene.__showing ?? 0) + 1
+  scene.events.once('shutdown', () => { scene.__showing = (scene.__showing ?? 0) + 1 })
 }

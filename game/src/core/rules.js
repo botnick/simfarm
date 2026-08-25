@@ -896,6 +896,21 @@ export function travel(state, data) {
  */
 export function checkData(data) {
   const problems = []
+
+  // Shapes first, because everything below walks these. Checking afterwards
+  // meant a rule book with `crops: {}` threw on the way to the check that would
+  // have reported it — so the server fell over instead of refusing the book and
+  // saying which part of it was wrong.
+  for (const list of ['crops', 'goods', 'supplies', 'animals', 'tools', 'recipes', 'milestones']) {
+    if (data[list] != null && !Array.isArray(data[list])) {
+      problems.push(`${list} is not a list`)
+      data = { ...data, [list]: [] }
+    }
+  }
+  if (data.rules == null || typeof data.rules !== 'object') {
+    problems.push('the rule book has no rules in it')
+    return problems
+  }
   const has = (list, id) => byId(data[list] ?? [], id) != null
   const ONE = { crops: 'crop', goods: 'good', supplies: 'supply', animals: 'animal', recipes: 'recipe', tools: 'tool' }
   const ref = (where, list, id) => {
@@ -1053,9 +1068,25 @@ export function checkData(data) {
   }
   if (!chance(r.barn?.spoilRate)) problems.push('the spoil rate is not a share of the surplus')
 
-  // The lists themselves have to be lists, since everything above walks them.
-  for (const list of ['crops', 'goods', 'supplies', 'animals', 'tools', 'recipes', 'milestones']) {
-    if (data[list] != null && !Array.isArray(data[list])) problems.push(`${list} is not a list`)
+  // How a farm grows. Reached on every level-up and every screen that says what
+  // the next one brings, and never checked until now.
+  const prog = data.progression ?? {}
+  if (!Number.isFinite(prog.thresholdFactor) || prog.thresholdFactor <= 0) {
+    problems.push(`experience is scaled by ${prog.thresholdFactor}, which is not a number to multiply by`)
+  }
+  if (prog.milestoneEvery != null && !(Number.isSafeInteger(prog.milestoneEvery) && prog.milestoneEvery > 0)) {
+    problems.push(`a milestone every ${prog.milestoneEvery} levels is not a number of levels`)
+  }
+  // A key beginning with an underscore is a note to whoever edits the file, the
+  // convention this whole rule book uses to explain itself. Not a setting.
+  for (const [key, value] of Object.entries(prog.grant ?? prog.grants ?? {})) {
+    if (key.startsWith('_')) continue
+    if (!Number.isFinite(value)) problems.push(`levelling grants ${value} of ${key}, which is not a number`)
+  }
+  for (const m of data.milestones ?? []) {
+    if (m?.when === 'level' && !(Number.isSafeInteger(m.level) && m.level > 0)) {
+      problems.push(`milestone "${m?.id}" waits for level ${m?.level}, which is not a level`)
+    }
   }
   for (const key of ['startMoney', 'startEnergy', 'startDay', 'travelEnergy', 'feedEnergy']) {
     if (!Number.isFinite(r[key])) problems.push(`rules.${key} is ${r[key]}, which is not a number`)

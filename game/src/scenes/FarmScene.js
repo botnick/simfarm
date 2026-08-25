@@ -11,7 +11,7 @@ import { setBackdrop } from '../ui/backdrop.js'
 import { t, tx } from '../core/i18n.js'
 import { isTouch } from '../core/device.js'
 import { bindKeys } from '../core/keys.js'
-import { whileHere } from '../ui/while-here.js'
+import { nowShowing, whileHere } from '../ui/while-here.js'
 
 /**
  * The farm as the original drew it. The house becomes the workshop, the road
@@ -25,6 +25,7 @@ export default class FarmScene extends Phaser.Scene {
 
   create() {
     fitCamera(this)
+    nowShowing(this)
     enter(this)
     playMusic(this, 'farm')
     setBackdrop('farm')

@@ -34,6 +34,10 @@ export default class MenuScene extends Phaser.Scene {
     // Which attempt is the current one. Anything still waiting on an answer
     // from a menu that has since been left or restarted must not act on it.
     this.attempt = (this.attempt ?? 0) + 1
+    // Leaving counts as much as restarting. The buttons are locked while a farm
+    // opens, but nothing stops something else stopping this scene, and a result
+    // arriving after that would start a farm behind whatever replaced it.
+    this.events.once('shutdown', () => { this.attempt = (this.attempt ?? 0) + 1 })
     fitCamera(this)
     enter(this)
     playMusic(this, 'farm')
@@ -144,7 +148,7 @@ export default class MenuScene extends Phaser.Scene {
     // restarted while it does. An answer that arrives for a menu nobody is
     // looking at any more must not start a farm behind whatever replaced it.
     const attempt = this.attempt
-    const stale = () => this.attempt !== attempt
+    const stale = () => this.attempt !== attempt || !this.scene.isActive()
     // Opening a server client, building a farm and starting the next scene all
     // sit outside the network call and can all throw. Any of them throwing used
     // to leave the flag set and both buttons off, which is the same dead menu by

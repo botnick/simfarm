@@ -36,7 +36,12 @@ for (const spec of families) {
     const bin = Buffer.from(await fetch(src, { headers: { 'User-Agent': UA } }).then(r => r.arrayBuffer()))
     writeFileSync(join(OUT, file), bin)
     css += `@font-face{font-family:'${family}';font-style:normal;font-weight:${weight};font-display:block;`
-      + `src:url('/assets/fonts/${file}') format('woff2');${range ? `unicode-range:${range};` : ''}}\n`
+      // Relative to this stylesheet, not to the root of a domain. Vite copies
+      // whatever is in public/ without touching it, so a root-absolute url here
+      // asks for /assets/fonts/... whatever the game is actually served under —
+      // and a game served from a path below the root gets no fonts at all, with
+      // nothing on screen to say why.
+      + `src:url('./${file}') format('woff2');${range ? `unicode-range:${range};` : ''}}\n`
     console.log(`  ${file.padEnd(34)} ${String(bin.length).padStart(7)} bytes`)
   }
 }

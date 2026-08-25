@@ -125,10 +125,21 @@ it sounds: a tunnel gets a new address every time it restarts, and without it th
 deployed game would simply stop working with no way to reach it. Setting the slot
 to an empty string plays offline.
 
-Run the suites against the built bundle, not only the source:
+Served under a path, the address needs its trailing slash: everything the game
+asks for at runtime — the rule book, the artwork, the sounds — is relative to the
+page, so `/simfarm` without the slash looks for them one directory too high and
+finds nothing. Redirect `/simfarm` to `/simfarm/`.
+
+Run the suites against the built bundle, not only the source — and against a
+build served under a path, if that is where it is going:
 
     npm run build && npx vite preview --port 4173
     URL=http://localhost:4173/ npm run e2e
+
+The fonts are the part that only breaks under a path. `public/` is copied
+verbatim, so a root-absolute `url()` inside `assets/fonts/fonts.css` would ask
+for the files at the root of the domain wherever the game actually is — and the
+only sign of it is that the display face quietly does not arrive.
 
 ## Credit
 

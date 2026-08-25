@@ -12,7 +12,7 @@ import { t, tx } from '../core/i18n.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx } from '../core/audio.js'
 import { outcome, saidAs, takings } from '../ui/sale.js'
-import { whileHere } from '../ui/while-here.js'
+import { nowShowing, whileHere } from '../ui/while-here.js'
 
 const PER_PAGE = 4
 
@@ -25,6 +25,7 @@ export default class ShopScene extends Phaser.Scene {
 
   create() {
     fitCamera(this)
+    nowShowing(this)
     enter(this)
     playMusic(this, 'village')
     setBackdrop('shop')

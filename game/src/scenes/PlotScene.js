@@ -10,7 +10,7 @@ import { t, tx } from '../core/i18n.js'
 import { touchPad } from '../core/device.js'
 import { bindKeys } from '../core/keys.js'
 import { playMusic, sfx, toolSfx } from '../core/audio.js'
-import { whileHere } from '../ui/while-here.js'
+import { nowShowing, whileHere } from '../ui/while-here.js'
 import { owned } from '../core/fatal.js'
 
 // Fields 1-2 and 3-4 use two different soil layouts in the original art.
@@ -35,6 +35,7 @@ export default class PlotScene extends Phaser.Scene {
 
   create() {
     fitCamera(this)
+    nowShowing(this)
     enter(this)
     playMusic(this, 'farm')
     this.data_ = this.registry.get('data')
