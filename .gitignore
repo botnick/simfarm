@@ -20,3 +20,4 @@ tools/.venv/
 run/
 # Points the build at whatever tunnel is up right now; not a fact about the game.
 game/.env.production
+tools/__pycache__/

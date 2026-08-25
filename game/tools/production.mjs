@@ -22,9 +22,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, extname } from 'node:path'
+import { ensureDist } from './lib/dist.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DIST = join(HERE, '../dist')
+ensureDist()
 const W = 600, H = 420
 
 let pass = 0
@@ -122,7 +124,11 @@ const click = async (sx, sy, wait = 700) => {
   await new Promise(r => setTimeout(r, wait))
 }
 const scene = () => page.evaluate(() => window.__game.scene.scenes.filter(x => x.scene.isActive()).map(x => x.scene.key).join('+'))
-const farm = (expr) => page.evaluate(new Function(`const f = window.__game.registry.get('farm'); const s = f?.state; return (${expr})`))
+// A run where no farm ever opened used to die here rather than fail: the
+// state was guarded but the farm itself was not, so the first question asked
+// of it threw and took the whole suite with it, reporting a stack instead of
+// which assertion went wrong.
+const farm = (expr) => page.evaluate(new Function(`const f = window.__game?.registry?.get('farm'); if (!f) return undefined; const s = f.state; return (${expr})`))
 
 // The whole point: the game is at one address and the server at another, so
 // every request is a preflight away from working at all.

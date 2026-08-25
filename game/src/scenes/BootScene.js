@@ -39,25 +39,25 @@ export default class BootScene extends Phaser.Scene {
     // are still the frames lifted out of the SWF, one at a time as they are
     // replaced. Named here rather than guessed at, so a missing file is a
     // missing file rather than a silent fallback to somebody else's drawing.
-    const DRAWN = { pest: 'prop-pest', rain: 'prop-rain', soil: 'prop-soil' }
-    for (const name of ['pest', 'egg', 'chicken', 'chicken_2', 'chicken_3', 'chicken_4', 'energy_fill',
-      'supply_fertilizer', 'supply_pesticide', 'supply_feed']) {
+    // Only what something can actually reach. The chicken's other three
+    // frames, the heart fill and the five tool icons were all still being
+    // loaded after the things that used them had gone: the heart is drawn from
+    // a curve in the HUD now, and the tool icons come from the plate, which is
+    // why PlotScene puts nothing but a hit zone and a ring over the bar.
+    const DRAWN = { pest: 'prop-pest' }
+    for (const name of ['pest', 'egg', 'chicken', 'supply_fertilizer', 'supply_pesticide', 'supply_feed']) {
       if (DRAWN[name]) this.load.image(`art:${name}`, `assets/goods/${DRAWN[name]}.png`)
       else this.load.svg(`art:${name}`, `assets/art/${name}.svg`, { scale: 1.6 * RENDER_SCALE })
     }
-    for (const t of data.tools) this.load.image(`art:tool_${t.id}`, `assets/goods/tool-${t.id}.png`)
     // Goods that have real art declare it; the rest are drawn by the UI.
     for (const g of data.goods) if (g.image) this.load.image(`good:${g.id}`, `assets/goods/${g.image}.png`)
     // Only the chicken came out of the SWF; the rest of the livestock was drawn
     // to match it and lives alongside the product art.
     for (const a of data.animals) if (a.image) this.load.image(`animal:${a.id}`, `assets/goods/${a.image}.png`)
     for (const sp of data.supplies) if (sp.image) this.load.image(`supply:${sp.id}`, `assets/goods/${sp.image}.png`)
-    // Scene plates. A frame that has been redrawn ships as a PNG at the same
-    // 600x420 layout as the plate it replaces, so no hotspot or click moves.
-    const REDRAWN = new Set(['farm', 'plot1', 'plot2', 'plot3', 'plot4'])
+    // Scene plates are exact 600x420 renders of the original frames.
     for (const s of ['menu', 'farm', 'plot1', 'plot2', 'plot3', 'plot4', 'coop', 'village', 'shop', 'shop_animal']) {
-      if (REDRAWN.has(s)) this.load.image(`scene:${s}`, `assets/scenes/${s}.png`)
-      else this.load.svg(`scene:${s}`, `assets/scenes/${s}.svg`, { width: WIDTH * RENDER_SCALE, height: HEIGHT * RENDER_SCALE })
+      this.load.svg(`scene:${s}`, `assets/scenes/${s}.svg`, { width: WIDTH * RENDER_SCALE, height: HEIGHT * RENDER_SCALE })
     }
     // Every cue the data file names, and nothing else.
     for (const [key, path] of audioManifest(data)) this.load.audio(key, path)

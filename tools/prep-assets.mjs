@@ -25,14 +25,23 @@ const dropIds = (svg) => (map.dropIds || []).reduce((out, id) =>
 
 let n = 0
 const missing = []
-for (const [crop, id] of Object.entries(map.cropMasters)) {
-  for (const stage of map.cropStages) {
-    const src = spriteFrame(id, stage)
-    if (!existsSync(src)) { missing.push(src); continue }
-    write(`crops/${crop}/${stage}.svg`, stripPest(readFileSync(src, 'utf8'))); n++
+// What the map marks retired is still recorded there — the character ids were
+// the hard part — but it is not lifted out any more. The game loads none of it,
+// so writing it put unreferenced files back on every run, which is how deleting
+// them once quietly undid itself.
+const retired = map.retired ?? {}
+const dropped = new Set(retired.spriteFrames ?? [])
+if (!retired.crops) {
+  for (const [crop, id] of Object.entries(map.cropMasters)) {
+    for (const stage of map.cropStages) {
+      const src = spriteFrame(id, stage)
+      if (!existsSync(src)) { missing.push(src); continue }
+      write(`crops/${crop}/${stage}.svg`, stripPest(readFileSync(src, 'utf8'))); n++
+    }
   }
 }
 for (const [name, [id, frame]] of Object.entries(map.spriteFrames)) {
+  if (dropped.has(name)) continue
   const src = spriteFrame(id, frame)
   if (!existsSync(src)) { missing.push(src); continue }
   copy(`art/${name}.svg`, src); n++

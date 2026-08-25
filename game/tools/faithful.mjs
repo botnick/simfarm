@@ -21,9 +21,11 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, extname } from 'node:path'
 import { checkData, has } from '../src/core/rules.js'
+import { ensureDist } from './lib/dist.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DIST = join(HERE, '../dist')
+ensureDist()
 const W = 600, H = 420
 
 let pass = 0

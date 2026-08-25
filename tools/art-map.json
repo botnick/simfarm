@@ -137,5 +137,27 @@
     "grain": "supply_feed",
     "hay": "supply_feed",
     "fodder": "supply_feed"
+  },
+  "retired": {
+    "_why": "Replaced by drawn art under game/public/assets. The SWF ids stay here because decoding them was the hard part, but prep-assets no longer writes them: nothing in the game loads any of these, and emitting them anyway put sixteen unreferenced art files and forty-eight dead crop plates back every time the tool was run.",
+    "crops": true,
+    "spriteFrames": [
+      "pest",
+      "rain",
+      "soil",
+      "chicken_2",
+      "chicken_3",
+      "chicken_4",
+      "energy_fill",
+      "tool_harvest",
+      "tool_water",
+      "tool_fertilize",
+      "tool_spray",
+      "tool_clear",
+      "hud_money",
+      "hud_heart",
+      "hud_tools",
+      "hud_daymoney"
+    ]
   }
 }
