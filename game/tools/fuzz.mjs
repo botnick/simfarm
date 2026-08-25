@@ -55,6 +55,18 @@ function wrong(state) {
   if (state.energy < 0) return `energy went to ${state.energy}`
   if (state.debt < 0) return `debt went to ${state.debt}`
   if (state.xp < 0) return `xp went to ${state.xp}`
+  // The one this list was missing. Nothing in the rules is supposed to be able
+  // to spend money the farm does not have — every purchase tests the price
+  // first — but that is exactly the kind of claim a fuzzer is for.
+  if (state.money < 0) return `money went to ${state.money}`
+  if (state.earned < 0) return `total earned went to ${state.earned}`
+  if (state.seasonEarned < 0) return `this season's takings went to ${state.seasonEarned}`
+  if (state.bestSeason < 0) return `the best season went to ${state.bestSeason}`
+  // Money and energy are counted in whole units everywhere they are shown, so a
+  // fraction is a rounding bug that would print as 3.0000000000000004.
+  if (!Number.isInteger(state.money)) return `money is ${state.money}`
+  if (!Number.isInteger(state.energy)) return `energy is ${state.energy}`
+  if (!Number.isInteger(state.debt)) return `debt is ${state.debt}`
 
   const bags = { seeds: state.seeds, 'barn.crops': state.barn.crops, 'barn.goods': state.barn.goods, supplies: state.supplies, animals: state.animals, fed: state.fed }
   for (const [name, bag] of Object.entries(bags)) {
@@ -87,6 +99,10 @@ function wrong(state) {
   for (const o of state.market?.orders ?? []) {
     if (!rules.cropById(data, o.cropId)) return `the market wants "${o.cropId}", which does not exist`
     if (o.filled > o.quota) return `an order is filled ${o.filled} of ${o.quota}`
+    if (!counter(o.filled) || !counter(o.quota)) return `an order reads ${o.filled} of ${o.quota}`
+  }
+  for (const [id, n] of Object.entries(state.market?.sold ?? {})) {
+    if (!counter(n)) return `the market has sold ${n} of ${id}`
   }
   return null
 }
@@ -206,8 +222,15 @@ for (let seed = 1; seed <= SEEDS && !broke; seed++) {
       }
     }
 
+    const dayBefore = state.day
     try { rules.endDay(state, data, rng) } catch (err) {
       broke = `seed ${seed}, day ${day}: the night threw ${err.message}`
+      break
+    }
+    // One night, one day. A night that moved the calendar twice, or not at all,
+    // would go unnoticed by every other check here.
+    if (state.day !== dayBefore + 1) {
+      broke = `seed ${seed}, day ${day}: the night moved the calendar from ${dayBefore} to ${state.day}`
       break
     }
     const bad = wrong(state)

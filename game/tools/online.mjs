@@ -124,6 +124,27 @@ eq('the day advanced', await farm('s.day'), dayBefore + 1)
 eq('and the server is on the same day', (await serverState()).day, await farm('s.day'))
 await page.screenshot({ path: 'shots/online/1-farm.png' })
 
+/* ------------------------------------------ an impatient player, over a network */
+// Two presses before the first answer arrives. Both carry the revision the
+// browser believed at the time, so the second is stale and the server refuses
+// it — correctly, but a refusal toast landing next to the new morning tells the
+// player something went wrong when nothing did. The screen ignores the second
+// press instead, and this is the only place that can prove it: offline there is
+// no gap between the press and the answer to press in.
+{
+  const dayBefore = await farm('s.day')
+  const box2 = await page.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+  const at = [box2.x + box2.w * (522 / W), box2.y + box2.h * (394 / H)]
+  await page.mouse.click(...at)
+  await page.mouse.click(...at)                               // no waiting in between
+  await new Promise(r => setTimeout(r, 1600))
+  eq('two presses in a row advance one day, not two', await farm('s.day'), dayBefore + 1)
+  const shouting = await texts()
+  ok('and the player is not told anything went wrong',
+    !shouting.some(x => /nothing to do|ยังไม่มีอะไร|offline/i.test(x)), JSON.stringify(shouting))
+  eq('and the server is on that same day', (await serverState()).day, await farm('s.day'))
+}
+
 /* ------------------------------------------------ the client cannot lie */
 // Rewrite the browser's copy and prove the next answer from the server wipes it.
 await page.evaluate(() => { window.__game.registry.get('farm').state.money = 999999 })
