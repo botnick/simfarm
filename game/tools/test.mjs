@@ -150,9 +150,18 @@ const fresh = (level = null) => {
   s.pending.push({ id: 'recipe-that-was-removed', daysLeft: 2 })
   s.market.orders.push({ cropId: 'crop-that-was-removed', quota: 12, filled: 0 })
 
+  // Left alone, that field is out of the game: nothing grows in it, it cannot
+  // be sown because it already holds a crop, and it cannot be cleared because
+  // nothing in it is dead. Until the night was guarded it was worse than that —
+  // it threw, so the day could never be ended again either.
+  const untouched_ = structuredClone(s)
   let threw = null
-  try { endDay(structuredClone(s), data) } catch (e) { threw = e }
-  ok('a save holding a vanished crop is what used to end the game', threw !== null)
+  try { endDay(untouched_, data) } catch (e) { threw = e }
+  eq('the night no longer dies on a crop the game has lost', threw, null)
+  ok('but nothing in that field grows',
+    untouched_.plots[0].tiles.every(t => t.stage === s.plots[0].tiles[0].stage))
+  ok('and it cannot be sown', !plant(untouched_, data, 0, 'turnip'))
+  eq('and clearing does not help, because nothing in it is dead', clearPlot(untouched_, data, 0), 0)
 
   const lost = reconcile(s, data)
   eq('the vanished crop is named as lost', lost.crops.includes('crop-that-was-removed'), true)
@@ -174,6 +183,78 @@ const fresh = (level = null) => {
   let after = null
   try { endDay(s, data) } catch (e) { after = e }
   eq('and the night runs', after, null)
+
+  // The other direction, and the one that actually happens: somebody ADDS a
+  // crop, an animal or a supply. A save written before that edit has no counter
+  // for the new thing at all, and the shop was happy to sell it — `undefined +
+  // 1` left NaN in the farm, which then spread through every total it was part
+  // of and printed as "NaN" on the wallet.
+  const older = fresh()
+  delete older.animals.duck
+  delete older.fed.duck
+  delete older.supplies.grain
+  reconcile(older, data)
+  eq('an animal the save had never heard of starts at none', older.animals.duck, 0)
+  eq('and so does its feeding', older.fed.duck, 0)
+  eq('and a supply it had never heard of', older.supplies.grain, 0)
+  older.money = 99999; older.xp = 999999
+  ok('so one can actually be bought', buyAnimal(older, data, 'duck'))
+  eq('and the farm counts it as one, not as NaN', older.animals.duck, 1)
+  ok('and a supply can be bought', buySupply(older, data, 'grain'))
+  ok('and counted', Number.isSafeInteger(older.supplies.grain) && older.supplies.grain > 0)
+
+  // Counters that survived an edit are still only worth having as numbers.
+  const junk = fresh()
+  junk.animals.cow = 'lots'
+  junk.fed.cow = -4
+  junk.supplies.hay = NaN
+  junk.seeds.turnip = 2.5
+  reconcile(junk, data)
+  eq('a count that is not a number becomes none', junk.animals.cow, 0)
+  eq('a negative count becomes none', junk.fed.cow, 0)
+  eq('and so does a NaN', junk.supplies.hay, 0)
+  eq('and a fraction', junk.seeds.turnip, 0)
+
+  // More mouths fed than animals owned can only come from a save disagreeing
+  // with itself, and it feeds a herd that is not there.
+  const overfed = fresh()
+  overfed.animals.cow = 2
+  overfed.fed.cow = 9
+  reconcile(overfed, data)
+  eq('nothing is fed twice', overfed.fed.cow, 2)
+
+  // The farm's shape is data too. A rule book handing out more fields than this
+  // save was written with used to leave the rules reaching past the end of an
+  // array.
+  const small = fresh()
+  small.plots = small.plots.slice(0, 1)
+  small.plots[0].tiles = small.plots[0].tiles.slice(0, 3)
+  reconcile(small, data)
+  eq('a save from before the farm grew gets the fields it is owed', small.plots.length, R.plots)
+  ok('and every field is a whole field', small.plots.every(p => p.tiles.length === R.tilesPerPlot))
+  ok('and the night runs over all of them', (() => { try { endDay(small, data); return true } catch { return false } })())
+
+  // Land the player already has is never taken away, whatever the rule book now
+  // says: a farm that shrinks is a field somebody paid for and lost.
+  const big = fresh()
+  const extra = structuredClone(big.plots[0])
+  big.plots.push(extra)
+  reconcile(big, data)
+  eq('a farm with more land than the rule book gives out keeps it', big.plots.length, R.plots + 1)
+
+  // Energy is one day's worth and the rule book decides how much that is.
+  const rested = fresh()
+  rested.energy = 100000
+  reconcile(rested, data)
+  eq('energy above what the farm can hold is just a full day',
+    rested.energy, rules.farmLimits(rested, data).energy)
+
+  // The barn is deliberately left alone: it is allowed to overflow, and
+  // spoilage at the end of the day is the rule that deals with it.
+  const hoard = fresh()
+  hoard.barn.crops.turnip = 9999
+  reconcile(hoard, data)
+  eq('a barn over its comfortable limit is not quietly emptied', hoard.barn.crops.turnip, 9999)
 
   // Nothing is taken from a save that agrees with the data already.
   const untouched = fresh()

@@ -31,21 +31,25 @@ Adding a crop, an animal, a recipe or a milestone is an edit to
 `game/public/data/game.json`. Nothing in the code holds a list of them.
 
 A farm saved before such an edit outlives it, so both halves of the game
-reconcile a save against the rule book they are about to play it under: anything
+reconcile a save against the rule book they are about to play it under. Anything
 that no longer exists is dropped, and a field growing a crop that was removed is
-emptied rather than lost. Without that the night looked the crop up to age it,
+emptied rather than lost. Adding is the commoner edit and was the worse bug: a
+save written before a crop, animal or supply existed had no counter for it, so
+buying one did `undefined + 1` and left NaN spreading through every total it was
+part of — everything the rule book has now gets a counter, whether the save had
+heard of it or not. Land already owned is never taken away. Without that the night looked the crop up to age it,
 found nothing, and threw — so the day could never be ended again and the farm was
 finished, offline and online alike. The offline game says so with a banner; the
 server logs what it dropped.
 
 ## Checking a change
 
-    npm test             # 390  the rules
+    npm test             # 411  the rules
     npm run e2e          # 221  the game in a browser, offline
     npm run online       #  64  the game in a browser, against a real server
-    npm run test:server  # 159  the server refusing what it should
+    npm run test:server  # 166  the server refusing what it should
     npm run facade       #  57  what the browser does with every answer a server can give
-    npm run reach        #  29  every crop, animal, recipe and reward is reachable,
+    npm run reach        #  35  every crop, animal, recipe and reward is reachable,
                          #      and both languages say everything
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
@@ -88,6 +92,13 @@ place by finding something:
   and three lines that were not orphans at all, but things the rules worked out
   every night and the farm screen never read, including crops rotting in an
   overfull barn.
+
+The rule book also has to hang together with itself. What an animal eats and
+produces, what a recipe takes and makes, what a tool consumes, which seed the
+rescue loan hands back — each is an id pointing at another id, and nothing checks
+them while a farm is being played. `reach` checks them, and the server refuses to
+start on a book that does not, because the alternative is a game that starts
+perfectly well and breaks later, in somebody's night, with no way back.
 
 Run `pace` after touching `progression` or any `unlockLevel`. Content nobody can
 reach may as well not exist, and a quadratic curve is very easy to write in a way

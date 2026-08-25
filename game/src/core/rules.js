@@ -330,31 +330,56 @@ export function plant(state, data, plotIndex, cropId) {
  */
 export function reconcile(state, data) {
   const r = data.rules
-  const dropped = { crops: [], animals: [], goods: [], recipes: [], plots: 0, orders: 0 }
+  const dropped = { crops: [], animals: [], goods: [], supplies: [], recipes: [], plots: 0, orders: 0 }
   const known = (list, id) => byId(list, id) != null
+  // A counter that survived an edit is still only trustworthy as a number. NaN
+  // spreads through every sum it touches and prints as "NaN" on the wallet.
+  const count = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0)
 
   const sift = (bag, list, into) => {
     if (!bag) return
     for (const id of Object.keys(bag)) {
-      if (known(list, id)) continue
+      if (known(list, id)) { bag[id] = count(bag[id]); continue }
       if (bag[id]) into.push(id)
       delete bag[id]
     }
   }
   sift(state.seeds, data.crops, dropped.crops)
-  sift(state.barn?.crops, data.crops, dropped.crops)
+  sift(state.barn?.crops, data.crops, [])
   sift(state.market?.sold, data.crops, [])
   sift(state.barn?.goods, data.goods, dropped.goods)
 
-  // Animals come in pairs of counters and both have to go, or feeding walks a
-  // herd that is not there.
-  for (const id of Object.keys(state.animals ?? {})) {
+  // Removing something is only half of it, and the quieter half. Adding a crop,
+  // an animal or a supply is the edit people actually make, and a save written
+  // before that edit has no counter for the new thing at all — so buying one
+  // did `undefined + 1` and left NaN in the farm, which then spread through
+  // every total it was part of. Anything the rule book has now gets a counter,
+  // whether or not the save had ever heard of it.
+  state.supplies ??= {}
+  for (const id of Object.keys(state.supplies)) {
+    if (known(data.supplies, id)) continue
+    if (state.supplies[id]) dropped.supplies.push(id)
+    delete state.supplies[id]
+  }
+  for (const item of data.supplies ?? []) state.supplies[item.id] = count(state.supplies[item.id])
+
+  // Animals come in pairs of counters and both have to agree, or feeding walks
+  // a herd that is not there.
+  state.animals ??= {}
+  state.fed ??= {}
+  for (const id of Object.keys(state.animals)) {
     if (known(data.animals, id)) continue
     if (state.animals[id]) dropped.animals.push(id)
     delete state.animals[id]
-    delete state.fed?.[id]
+    delete state.fed[id]
   }
-  for (const id of Object.keys(state.fed ?? {})) if (!known(data.animals, id)) delete state.fed[id]
+  for (const id of Object.keys(state.fed)) if (!known(data.animals, id)) delete state.fed[id]
+  for (const a of data.animals ?? []) {
+    state.animals[a.id] = count(state.animals[a.id])
+    // More fed than owned is a herd being fed twice; it can only ever have come
+    // from a save that disagrees with itself.
+    state.fed[a.id] = Math.min(count(state.fed[a.id]), state.animals[a.id])
+  }
 
   // A batch curing towards a recipe that no longer exists never finishes.
   state.pending = (state.pending ?? []).filter(job => {
@@ -371,7 +396,16 @@ export function reconcile(state, data) {
     dropped.orders = before - state.market.orders.length
   }
 
-  for (const plot of state.plots ?? []) {
+  // The farm's shape is data too. A rule book that gives out more fields than
+  // this save was written with leaves the rules reaching past the end of an
+  // array; land the player already owns is never taken away, because a farm
+  // that shrinks is a farm somebody paid for and lost.
+  state.plots ??= []
+  const bare = () => ({ cropId: null, tiles: Array.from({ length: r.tilesPerPlot }, () => ({ ...emptyTile(), stage: r.stage.empty })) })
+  while (state.plots.length < r.plots) state.plots.push(bare())
+  for (const plot of state.plots) {
+    plot.tiles ??= []
+    while (plot.tiles.length < r.tilesPerPlot) plot.tiles.push({ ...emptyTile(), stage: r.stage.empty })
     if (plot.cropId == null) continue
     if (known(data.crops, plot.cropId)) {
       // The other way a plot can strand: it holds a crop while every tile is
@@ -384,7 +418,16 @@ export function reconcile(state, data) {
     plot.tiles = plot.tiles.map(() => ({ ...emptyTile(), stage: r.stage.empty }))
   }
 
+  // Energy is one day's worth and the rule book decides how much that is, so a
+  // save carrying more than the farm can now hold is simply a full day. The
+  // barn is deliberately not clamped: it is allowed to overflow, and spoilage
+  // at the end of the day is the rule that deals with it.
+  state.energy = Math.min(count(state.energy), farmLimits(state, data).energy)
+
   dropped.crops = [...new Set(dropped.crops)]
+  dropped.animals = [...new Set(dropped.animals)]
+  dropped.goods = [...new Set(dropped.goods)]
+  dropped.supplies = [...new Set(dropped.supplies)]
   return dropped
 }
 
@@ -582,6 +625,12 @@ export function endDay(state, data, rng = Math.random) {
   for (const plot of state.plots) {
     if (!plot.cropId) continue
     const crop = cropById(data, plot.cropId)
+    // A crop the rule book no longer has cannot be grown. `reconcile` empties
+    // such a field before it is ever played, and this is the belt to that
+    // brace: a farm that reaches the night in that state stops growing, which
+    // the player can see and recover from, rather than throwing, which used to
+    // end the game for good.
+    if (!crop) continue
     const pest = pestOf(crop, r)
 
     for (const tile of plot.tiles) {
@@ -707,10 +756,19 @@ function rescueIfStuck(state, data, report) {
   if (!needsRescue(state, data)) return
   // The seed is a loan, not a gift. Emptying the barn on purpose to claim it
   // just moves the cost to the next sale, so there is nothing to farm.
-  const seed = cropById(data, rule.cropId)
-  state.seeds[rule.cropId] = (state.seeds[rule.cropId] ?? 0) + 1
+  //
+  // The rule book names which seed to give back, and a rule book can be edited.
+  // Of everything that could break when somebody removes a crop, the promise
+  // that the game never becomes unplayable is the last one that should — so a
+  // missing name falls back to the cheapest seed the farm could actually plant,
+  // and a rule book with no crops in it at all simply has nothing to give.
+  const named = cropById(data, rule?.cropId)
+  const seed = named ?? availableCrops(state, data).reduce(
+    (best, c) => (best == null || c.seedPrice < best.seedPrice ? c : best), null)
+  if (!seed) return
+  state.seeds[seed.id] = (state.seeds[seed.id] ?? 0) + 1
   state.debt = (state.debt ?? 0) + seed.seedPrice
-  report.rescued = rule.cropId
+  report.rescued = seed.id
 }
 
 /** Take repayment off the top of any sale, before the money is the player's. */
@@ -782,4 +840,60 @@ export function travel(state, data) {
   if (state.energy <= cost) return false
   state.energy -= cost
   return true
+}
+
+/**
+ * Is this rule book internally consistent?
+ *
+ * Every id in `game.json` that points at another id is a reference nobody
+ * checks at runtime. An animal is fed a supply, produces a good; a recipe eats
+ * crops and goods and yields a supply or a good; a tool consumes a supply; the
+ * rescue loan hands back a named crop. Rename or remove one end of any of those
+ * and the game keeps starting — the break only arrives later, in the night, on
+ * somebody's farm, as a crash with no way back.
+ *
+ * `reconcile` cannot help here: that is for a save disagreeing with the rule
+ * book, and this is the rule book disagreeing with itself. So it is checked
+ * where it can still be cheap — by the suite, and by the server before it
+ * agrees to serve anything.
+ *
+ * Returns a list of plain sentences, empty when the book hangs together.
+ */
+export function checkData(data) {
+  const problems = []
+  const has = (list, id) => byId(data[list] ?? [], id) != null
+  const ONE = { crops: 'crop', goods: 'good', supplies: 'supply', animals: 'animal', recipes: 'recipe', tools: 'tool' }
+  const ref = (where, list, id) => {
+    if (id == null) return
+    if (!has(list, id)) problems.push(`${where} refers to ${ONE[list]} "${id}", which does not exist`)
+  }
+
+  for (const a of data.animals ?? []) {
+    ref(`animal "${a.id}" feed`, 'supplies', a.feed)
+    ref(`animal "${a.id}" produces`, 'goods', a.produces)
+  }
+  for (const tool of data.tools ?? []) ref(`tool "${tool.id}" consumes`, 'supplies', tool.consumes)
+  for (const r of data.recipes ?? []) {
+    for (const i of r.inputs ?? []) {
+      ref(`recipe "${r.id}" input`, 'crops', i.crop)
+      ref(`recipe "${r.id}" input`, 'goods', i.good)
+    }
+    ref(`recipe "${r.id}" output`, 'supplies', r.output?.supply)
+    ref(`recipe "${r.id}" output`, 'goods', r.output?.good)
+    if (r.output?.supply == null && r.output?.good == null) problems.push(`recipe "${r.id}" makes nothing`)
+  }
+  ref('the rescue loan', 'crops', data.rules?.rescue?.cropId)
+
+  // The farm's shape has to be a shape. A rule book with no fields, no tiles or
+  // no crops is not a harder game, it is one nobody can play.
+  const r = data.rules ?? {}
+  if (!(r.plots > 0)) problems.push('the rule book gives out no fields')
+  if (!(r.tilesPerPlot > 0)) problems.push('a field in this rule book has no tiles')
+  if (!(data.crops ?? []).length) problems.push('there is nothing to grow')
+  // Something has to be plantable on the first day, or a new farm is stuck the
+  // moment it starts.
+  if ((data.crops ?? []).length && !(data.crops ?? []).some(c => (c.unlockLevel ?? 1) <= 1)) {
+    problems.push('no crop can be grown at level one, so a new farm can never start')
+  }
+  return problems
 }

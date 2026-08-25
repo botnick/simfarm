@@ -264,11 +264,11 @@ for exists, and that every line that exists is reachable from the code.
 ## Checking a change did not break it
 
     cd game
-    npm test             # 390  the rules
+    npm test             # 411  the rules
     npm run e2e          # 221  the game in a browser, offline
     npm run online       #  64  the game in a browser, against a real server
     npm run facade       #  57  what the browser does with every answer a server can give
-    npm run test:server  # 159  the server refusing what it should
+    npm run test:server  # 166  the server refusing what it should
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run reach        #  29  every crop, animal, recipe and reward is reachable

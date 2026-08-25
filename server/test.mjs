@@ -877,6 +877,54 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   rmSync(dir, { recursive: true, force: true })
 }
 
+/* --------------------------------- a rule book that does not hang together */
+{
+  // Every id in the rule book that points at another id is a reference nothing
+  // checks while a farm is being played: what an animal eats and produces, what
+  // a recipe takes and makes, what a tool consumes, which seed the rescue loan
+  // hands back. Break one and the server used to start perfectly well — the
+  // break arrived later, in somebody's night, as a fault with no way back.
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const dir = mkdtempSync(join(tmpdir(), 'simfarm-book-'))
+  const long = 'k'.repeat(40)
+
+  const bootWith = (book) => new Promise((resolve) => {
+    const file = join(dir, `${Math.random().toString(36).slice(2)}.json`)
+    writeFileSync(file, JSON.stringify(book))
+    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+      env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_DATA: file, SIMFARM_STRICT: '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let out = ''
+    child.stdout.on('data', d => { out += d })
+    child.stderr.on('data', d => { out += d })
+    child.on('exit', (code) => resolve({ code, out }))
+    setTimeout(() => { child.kill(); resolve({ code: null, out }) }, 5000)
+  })
+
+  const good = await bootWith(DATA)
+  eq('the rule book this build ships is served', good.code, null)
+  ok('and the server listens', good.out.includes('farm server on'), good.out.slice(0, 200))
+
+  const fed = structuredClone(DATA)
+  fed.animals[0].feed = 'no-such-supply'
+  const onFed = await bootWith(fed)
+  eq('an animal fed on nothing stops the server', onFed.code, 1)
+  ok('and it says which reference is broken',
+    onFed.out.includes('no-such-supply'), onFed.out.slice(0, 300))
+  ok('and it never listened', !onFed.out.includes('farm server on'), onFed.out.slice(0, 200))
+
+  const rescue = structuredClone(DATA)
+  rescue.crops = rescue.crops.filter(c => c.id !== rescue.rules.rescue.cropId)
+  const onRescue = await bootWith(rescue)
+  eq('and so does removing the crop the rescue loan hands back', onRescue.code, 1)
+  ok('which is the one that only ever broke for a player already in trouble',
+    onRescue.out.includes('rescue'), onRescue.out.slice(0, 300))
+
+  rmSync(dir, { recursive: true, force: true })
+}
+
 /* ------------------------- a farm saved under one rule book, opened under the next */
 {
   // Adding or removing a crop is documented as an edit to one JSON file, and a
@@ -896,16 +944,20 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   const boot = async (env) => {
     const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_ENDDAY_MS: '0', SIMFARM_STRICT: '', ...env },
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
     const url = await new Promise((resolve, reject) => {
       let out = ''
-      child.stdout.on('data', (d) => {
+      // Both streams: a server that refuses to start says why on stderr, and
+      // reporting "did not start:" with nothing after it wastes the run.
+      const watch = (d) => {
         out += d
         const m = out.match(/farm server on \S*?(\d+)/)
         if (m) resolve(`http://127.0.0.1:${m[1]}`)
-      })
-      setTimeout(() => reject(new Error(`second server did not start: ${out.slice(0, 200)}`)), 8000)
+      }
+      child.stdout.on('data', watch)
+      child.stderr.on('data', watch)
+      setTimeout(() => reject(new Error(`second server did not start: ${out.slice(0, 400)}`)), 8000)
     })
     const send = (path, body, session) => fetch(url + path, {
       method: 'POST',
@@ -921,7 +973,15 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   const before = await boot({})
   const opened = await before.send('/session', {})
   const S = opened.body.session
-  const crop = DATA.crops.find(c => (c.unlockLevel ?? 1) === 1).id
+  // A crop nothing else in the rule book refers to. Removing one that a recipe
+  // takes, or the one the rescue loan hands back, leaves a book that does not
+  // hang together — and the server now refuses to serve one of those at all,
+  // which is a different test.
+  const referenced = new Set([
+    DATA.rules.rescue?.cropId,
+    ...DATA.recipes.flatMap(r => (r.inputs ?? []).map(i => i.crop)),
+  ].filter(Boolean))
+  const crop = DATA.crops.find(c => (c.unlockLevel ?? 1) === 1 && !referenced.has(c.id)).id
   await before.send('/intent', { type: 'buySeed', cropId: crop }, S)
   const planted = await before.send('/intent', { type: 'plant', plot: 0, cropId: crop }, S)
   eq('a farm is growing something', planted.body.state.plots[0].cropId, crop)

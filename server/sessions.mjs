@@ -2,6 +2,7 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { makeRng } from './rng.mjs'
 import { memoryLedger } from './ledger.mjs'
+import { AtCapacity } from './errors.mjs'
 
 const clone = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)))
 
@@ -75,7 +76,7 @@ export function createStore({
       if (existing != null) forget(existing)
 
       // A cap keeps a flood of anonymous sessions from exhausting memory.
-      if (sessions.size >= maxSessions) throw new Error('too many sessions')
+      if (sessions.size >= maxSessions) throw new AtCapacity('too many sessions')
 
       const id = randomBytes(24).toString('hex')
       byFarm.set(farmId, id)

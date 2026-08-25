@@ -234,5 +234,34 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok('no milestone waits for a level far past the last unlock', beyond.length === 0, beyond.join(', '))
 }
 
+{
+  // The rule book has to hang together with itself. Every id in it that points
+  // at another id — what an animal eats, what it produces, what a recipe takes
+  // and makes, what a tool consumes, which seed the rescue loan hands back — is
+  // a reference nothing checks while the game is running. Break one and the
+  // game still starts; the break arrives later, in the night, on somebody's
+  // farm, as a crash with no way back.
+  const problems = rules.checkData(data)
+  ok('the rule book refers only to things it contains', problems.length === 0, problems.join(' | '))
+
+  // And the check has to be worth having, so it is shown a broken book.
+  const broken = structuredClone(data)
+  broken.animals[0].feed = 'no-such-supply'
+  broken.recipes[0].output = { amount: 1 }
+  broken.rules.rescue.cropId = 'no-such-crop'
+  const found = rules.checkData(broken)
+  ok('a feed that names nothing is caught', found.some(p => p.includes('no-such-supply')), found.join(' | '))
+  ok('a recipe that makes nothing is caught', found.some(p => p.includes('makes nothing')), found.join(' | '))
+  ok('and a rescue loan for a crop that was removed', found.some(p => p.includes('no-such-crop')), found.join(' | '))
+
+  const empty = structuredClone(data)
+  empty.crops = []
+  ok('a rule book with nothing to grow is caught', rules.checkData(empty).some(p => p.includes('nothing to grow')))
+  const locked = structuredClone(data)
+  locked.crops = locked.crops.map(c => ({ ...c, unlockLevel: 4 }))
+  ok('and one where a new farm could never plant anything',
+    rules.checkData(locked).some(p => p.includes('never start')))
+}
+
 console.log(`\n${pass} passed, ${failures.length} failed\n`)
 if (failures.length) { failures.forEach(f => console.error(`  ${f}`)); process.exit(1) }

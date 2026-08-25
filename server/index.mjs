@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import * as rules from '../game/src/core/rules.js'
 import { fingerprint } from '../game/src/core/data-version.js'
+import { AtCapacity } from './errors.mjs'
 import { createStore, sign, verify, SECRET_IS_EPHEMERAL } from './sessions.mjs'
 import { memoryLedger, fileLedger, DEFAULT_SAVE_TTL_MS } from './ledger.mjs'
 import { review, enforce, positive } from './config.mjs'
@@ -196,8 +197,17 @@ const readBody = (req, limit = BODY_LIMIT.intent) => new Promise((resolve, rejec
   })
   req.on('end', () => {
     if (over) { reject(new Error('body too large')); return }
-    try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks)) : {}) }
-    catch { reject(new Error('bad json')) }
+    let body
+    try { body = chunks.length ? JSON.parse(Buffer.concat(chunks)) : {} }
+    catch { reject(new Error('bad json')); return }
+    // Valid JSON is not the same as a body. `null`, `7` and `[]` all parse, and
+    // every handler here then reads fields off them — `null` threw, and left as
+    // an unexpected fault rather than the plain mistake it is.
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      reject(new Error('bad json'))
+      return
+    }
+    resolve(body)
   })
   req.on('error', reject)
 })
@@ -312,12 +322,18 @@ const server = createServer(async (req, res) => {
         session = store.get(id)
         store.noteRevision(session.farmId, session.revision)
       } catch (err) {
+        if (id) store.drop(id)
         // Either too many farms are being played at once, or the ledger that
         // refuses replays is full of farms whose saves have not expired yet.
         // Both are capacity, and both are the host's to size for — the important
         // thing is that neither is quietly resolved by forgetting a farm.
-        if (id) store.drop(id)
-        return json(res, 503, { error: 'the server is full', detail: err.message })
+        //
+        // A ledger that cannot be written to is none of those. It used to leave
+        // here as a full server with the write error attached, which told a host
+        // to buy capacity for a broken disk and told whoever asked where the
+        // file lives.
+        if (err instanceof AtCapacity) return json(res, 503, { error: 'the server is full' })
+        throw err
       }
       return json(res, 200, {
         session: id, revision: session.revision, state: view(session, DATA), data: DATA, dataVersion: DATA_VERSION,
@@ -494,6 +510,20 @@ if (!enforce(settings)) process.exit(1)
 // way to run without the ledger somebody asked for.
 if (ledgerProblems.length) {
   for (const line of ledgerProblems) console.error(line.startsWith(' ') ? line : `REFUSED: ${line}`)
+  process.exit(1)
+}
+
+// So is a rule book that does not hang together with itself. Every id in it
+// that points at another id — what an animal eats and produces, what a recipe
+// takes and makes, what a tool consumes, which seed the rescue loan hands back
+// — is a reference nothing checks while a farm is being played. Break one and
+// the server still starts; the break arrives later, in somebody's night, as a
+// fault with no way back. SIMFARM_DATA makes that a thing an operator can do by
+// accident, so it is checked here, once, before anything is listening.
+const bookProblems = rules.checkData(DATA)
+if (bookProblems.length) {
+  console.error(`REFUSED: the rule book at ${DATA_FILE} does not hang together`)
+  for (const line of bookProblems) console.error(`  ${line}`)
   process.exit(1)
 }
 

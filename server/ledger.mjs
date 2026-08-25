@@ -15,6 +15,7 @@
 // A host with a database should implement this against it and pass it in.
 import { readFileSync, writeFileSync, renameSync, mkdirSync, openSync, closeSync, fsyncSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { AtCapacity } from './errors.mjs'
 
 /**
  * How long a signed save stays valid.
@@ -60,7 +61,7 @@ function ledgerOver(load, persist, {
       // full ledger refuses a new farm rather than quietly unprotecting an old
       // one. That is a capacity problem for a host to size for, not a hole.
       if (!reclaim() && entries.size >= maxFarms) {
-        throw new Error('ledger is full of farms that can still be replayed')
+        throw new AtCapacity('ledger is full of farms that can still be replayed')
       }
     }
     entries.set(farmId, entry)
