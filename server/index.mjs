@@ -425,15 +425,22 @@ const server = createServer(async (req, res) => {
         if (!session.workedSinceEndDay && !rules.willAdvanceSimulation(session.state, DATA)) {
           return json(res, 409, { error: 'nothing would change overnight' })
         }
-        session.lastEndDay = now
-        session.workedSinceEndDay = false
       }
 
       const result = applyIntent(session, DATA, body)
       if (result.ok) {
         session.revision++
         store.noteRevision(session.farmId, session.revision)
-        if (body.type !== 'endDay') session.workedSinceEndDay = true
+        // Both of these describe a night that happened, so they are written
+        // after one did. Setting them before meant a night that failed still
+        // started the cooldown and still cleared the marker saying the player
+        // had done something today — charging them for a day they did not get.
+        if (body.type === 'endDay') {
+          session.lastEndDay = Date.now()
+          session.workedSinceEndDay = false
+        } else {
+          session.workedSinceEndDay = true
+        }
       }
 
       // Milestones go into an outbox with their own id and stay there until the

@@ -288,6 +288,23 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok('and a rule book with no way to clear withered ground',
     rules.checkData(toolless).some(p => p.includes('"clear" tool')))
 
+  // The numbers the night reads on every tile, every animal and every barn.
+  // Without them the server starts perfectly well and then fails every single
+  // night — which, now that a failed night changes nothing, is a farm that
+  // simply cannot be played rather than one that breaks loudly.
+  const nightless = structuredClone(data)
+  delete nightless.rules.stage
+  ok('a rule book the night cannot read is caught',
+    rules.checkData(nightless).some(p => p.includes('every night reads them')))
+  const jumbled = structuredClone(data)
+  jumbled.rules.stage.dead = jumbled.rules.stage.seed - 1
+  ok('and stages that run in the wrong order',
+    rules.checkData(jumbled).some(p => p.includes('out of order')))
+  const wordy = structuredClone(data)
+  wordy.rules.barn.spoilRate = 'a quarter'
+  ok('and a number written as a word',
+    rules.checkData(wordy).some(p => p.includes('not a number')))
+
   const empty = structuredClone(data)
   empty.crops = []
   ok('a rule book with nothing to grow is caught', rules.checkData(empty).some(p => p.includes('nothing to grow')))

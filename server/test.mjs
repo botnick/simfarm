@@ -877,6 +877,54 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   rmSync(dir, { recursive: true, force: true })
 }
 
+/* ---------------------------------- a night that fails is a night that did not happen */
+{
+  // The rules work on the farm in place, and a night does a great deal: it
+  // grows every tile, feeds every animal, finishes what is curing, spoils the
+  // surplus and turns the week over. A fault halfway through used to leave the
+  // farm half-advanced at the revision it started on — so the client, told the
+  // request had failed, would ask again from the same revision and get half a
+  // second night on top of half a first. Nothing is known to throw there now,
+  // which is exactly when a half-applied change is hardest to notice.
+  const { createStore } = await import('./sessions.mjs')
+  const { applyIntent } = await import('./intents.mjs')
+  const { memoryLedger } = await import('./ledger.mjs')
+  const store = createStore({ ledger: memoryLedger({ maxFarms: 8 }) })
+
+  const id = store.create(rules.newGame(DATA))
+  const session = store.get(id)
+  // Something worth losing: a sown field, a stocked barn, a fed animal.
+  await (async () => {
+    session.state.seeds[DATA.crops[0].id] = 3
+    rules.plant(session.state, DATA, 0, DATA.crops[0].id)
+    session.state.barn.crops[DATA.crops[0].id] = 12
+    session.state.animals[DATA.animals[0].id] = 2
+  })()
+  const before = JSON.stringify(session.state)
+  const rngBefore = session.rng.counter()
+  const revisionBefore = session.revision
+
+  // A rule book with the stage numbers taken out: the night reads them on every
+  // tile, so it gets a long way in before it cannot go further.
+  const broken = structuredClone(DATA)
+  delete broken.rules.stage
+  let threw = null
+  try { applyIntent(session, broken, { type: 'endDay' }) } catch (err) { threw = err }
+  ok('a night can still fail', threw !== null, 'nothing threw, so this proves nothing')
+  eq('and the farm is exactly as it was', JSON.stringify(session.state), before)
+  eq('down to the day it was on', session.state.day, JSON.parse(before).day)
+  eq('and the revision has not moved', session.revision, revisionBefore)
+  // The counter is the one thing living outside the copy. Left where the failed
+  // night pushed it, the retry would draw different weather from the same
+  // revision — the same farm, the same day, a different night.
+  eq('and the random source is back where it started', session.rng.counter(), rngBefore)
+
+  // And the farm still works afterwards.
+  const after = applyIntent(session, DATA, { type: 'endDay' })
+  eq('a good night still runs on it', after.ok, true)
+  eq('and moves the calendar on one day', session.state.day, JSON.parse(before).day + 1)
+}
+
 /* ------------------------------------------- a clock that went backwards */
 {
   // The wall clock is not monotonic — NTP corrects it, a host wakes from sleep,

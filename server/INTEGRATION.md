@@ -44,6 +44,15 @@ version proves its shape; neither says anything about which crops exist, and a
 farm growing one that has since been removed cannot be played at all. Set
 `SIMFARM_DATA` to run a build against a different rule book.
 
+An intent is applied to a copy of the farm and the copy is kept only if the
+whole of it succeeded. A night does a great deal of work — every tile, every
+animal, everything curing, the spoilage and the week — and a fault halfway
+through would otherwise leave the farm half-advanced at the revision it started
+on, so the client would retry from that revision and get half a second night on
+top of half a first. The random source is counted rather than stored, so it is
+rewound too: without that a retried night would draw different weather from the
+same revision.
+
 The server repeats back only the refusals it decided to make — `body too large`,
 `bad json`, `too many sessions`. Anything else is a fault, answered with a
 generic 500 and logged here rather than described to whoever asked.
@@ -268,7 +277,7 @@ for exists, and that every line that exists is reachable from the code.
     npm run e2e          # 227  the game in a browser, offline
     npm run online       #  70  the game in a browser, against a real server
     npm run facade       #  59  what the browser does with every answer a server can give
-    npm run test:server  # 173  the server refusing what it should
+    npm run test:server  # 180  the server refusing what it should
     npm run play         #  16  a real game, played for weeks, by clicking only
     npm run soak         #  13  ninety days played through the server over HTTP
     npm run reach        #  29  every crop, animal, recipe and reward is reachable

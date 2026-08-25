@@ -967,6 +967,43 @@ export function checkData(data) {
   for (const key of ['title', 'shopName']) {
     if (!String(data.meta?.[key] ?? '').trim()) problems.push(`the game has no ${key}`)
   }
+
+  // The numbers the night reads on every tile, every animal and every barn. A
+  // rule book without them starts a server perfectly well and then fails every
+  // single night — each one now failing cleanly and changing nothing, which
+  // means a farm that simply cannot be played rather than one that breaks
+  // loudly. Better to refuse the book.
+  const NEEDED = {
+    stage: ['seed', 'ripe', 'dead', 'empty'],
+    pest: ['spawnStage', 'spawnChance', 'deathChance'],
+    fertilizer: ['maxSafe', 'growthTicks'],
+    rain: ['chance'],
+    market: ['weekLength', 'seasonLength', 'orderCount', 'orderQuota', 'orderMultiplier'],
+    barn: ['softCap', 'spoilRate'],
+  }
+  for (const [group, keys] of Object.entries(NEEDED)) {
+    if (r[group] == null || typeof r[group] !== 'object') {
+      problems.push(`the rule book has no ${group} rules, and every night reads them`)
+      continue
+    }
+    for (const key of keys) {
+      if (!Number.isFinite(r[group][key])) problems.push(`rules.${group}.${key} is ${r[group][key]}, which is not a number`)
+    }
+  }
+  if (!Array.isArray(r.market?.tiers) || !r.market.tiers.length) {
+    problems.push('the market has no price tiers, so nothing can be quoted')
+  }
+  for (const key of ['startMoney', 'startEnergy', 'startDay', 'travelEnergy', 'feedEnergy']) {
+    if (!Number.isFinite(r[key])) problems.push(`rules.${key} is ${r[key]}, which is not a number`)
+  }
+  // Stages are read as an order, not just as numbers: a seed grows towards ripe,
+  // dying stops it, and bare earth is past the end of all of it.
+  if (Number.isFinite(r.stage?.seed) && Number.isFinite(r.stage?.ripe) && Number.isFinite(r.stage?.dead)
+    && Number.isFinite(r.stage?.empty)) {
+    if (!(r.stage.seed < r.stage.ripe && r.stage.ripe < r.stage.dead && r.stage.dead < r.stage.empty)) {
+      problems.push('the stages are out of order: a seed must come before ripe, ripe before dead, and bare earth after all of it')
+    }
+  }
   // Something has to be plantable on the first day, or a new farm is stuck the
   // moment it starts.
   if ((data.crops ?? []).length && !(data.crops ?? []).some(c => (c.unlockLevel ?? 1) <= 1)) {
