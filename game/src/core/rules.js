@@ -1158,20 +1158,50 @@ export function checkData(data) {
   // Content nothing can ever hand over.
   //
   // Audited from the emitting side rather than guessed at: a good reaches the
-  // barn in exactly two places — a recipe's output and an animal's produce —
-  // and a supply in exactly two — the shop and a recipe's output. A thing named
-  // by neither of its two is a thing the rule book describes, prices, draws and
-  // can never give anybody. That is not a game being hard; it is a book that
-  // cannot do what it says.
-  const madeByRecipe = new Set((data.recipes ?? []).map(r => r.output?.good).filter(Boolean))
-  const laidByAnimal = new Set((data.animals ?? []).map(a => a.produces).filter(Boolean))
-  for (const g of data.goods ?? []) {
-    if (g?.id && !madeByRecipe.has(g.id) && !laidByAnimal.has(g.id)) {
-      problems.push(`nothing produces "${g.id}", so no farm could ever hold one`)
+  // barn in exactly two places — a recipe's output and an animal's produce.
+  //
+  // Having an emitter is not the same as being reachable, though. A recipe that
+  // makes a good out of that same good has an emitter and can never run; so can
+  // two recipes that each want what the other makes. Both pass any check that
+  // only looks one step back. So this works forward from what a farm can get
+  // without making anything — seeds it can buy and animals it can buy — and
+  // keeps marking recipes usable until nothing new becomes usable. Whatever is
+  // left outside is content the rule book describes, prices and draws, and no
+  // farm could ever hold.
+  const reachableCrop = new Set((data.crops ?? []).filter(c => Number.isFinite(c.seedPrice)).map(c => c.id))
+  if (data.rules?.rescue?.cropId) reachableCrop.add(data.rules.rescue.cropId)
+  const reachableGood = new Set((data.animals ?? [])
+    .filter(a => Number.isFinite(a.price) && a.produces)
+    .map(a => a.produces))
+  // Every supply carries a price — checked below — so all of them are buyable.
+  const reachableSupply = new Set((data.supplies ?? []).map(x => x.id))
+
+  const canRun = (r) => (r.inputs ?? []).every(i =>
+    i.anyCrop != null ? reachableCrop.size > 0
+      : i.crop ? reachableCrop.has(i.crop)
+        : i.good ? reachableGood.has(i.good)
+          : true)
+
+  const usable = new Set()
+  for (let spread = true; spread;) {
+    spread = false
+    for (const r of data.recipes ?? []) {
+      if (usable.has(r) || !canRun(r)) continue
+      usable.add(r)
+      spread = true
+      if (r.output?.good && !reachableGood.has(r.output.good)) reachableGood.add(r.output.good)
+      if (r.output?.supply) reachableSupply.add(r.output.supply)
     }
   }
-  // Supplies need no equivalent: every one of them must carry a price, which is
-  // checked below, so every supply is buyable and none can be stranded.
+
+  for (const g of data.goods ?? []) {
+    if (g?.id && !reachableGood.has(g.id)) {
+      problems.push(`nothing can produce "${g.id}", so no farm could ever hold one`)
+    }
+  }
+  for (const r of data.recipes ?? []) {
+    if (!usable.has(r)) problems.push(`recipe "${r?.id}" needs something no farm could ever hold`)
+  }
 
   const audio = data.audio ?? {}
   const sounds = new Set(audio.sfx ?? [])

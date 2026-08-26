@@ -321,6 +321,24 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok(`and a good left behind when its recipe goes (${madeBy.output.good})`,
     rules.checkData(orphaned).some(p => p.includes(madeBy.output.good)))
 
+  // Having an emitter is not the same as being reachable. A recipe that makes a
+  // good out of that same good has an emitter and can never run, and neither
+  // can two recipes that each want what the other makes. A check that only
+  // looks one step back passes both, which is why the validator works forward
+  // from what a farm can buy until nothing new becomes makeable.
+  const selfEating = structuredClone(data)
+  const eats = selfEating.recipes.find(r => r.output?.good)
+  eats.inputs = [{ good: eats.output.good, amount: 1 }]
+  ok(`and a recipe that needs what it makes (${eats.id})`,
+    rules.checkData(selfEating).some(p => p.includes(eats.id)))
+
+  const circle = structuredClone(data)
+  const [one, two] = circle.recipes.filter(r => r.output?.good).slice(0, 2)
+  one.inputs = [{ good: two.output.good, amount: 1 }]
+  two.inputs = [{ good: one.output.good, amount: 1 }]
+  ok(`and two recipes that each need what the other makes (${one.id}, ${two.id})`,
+    rules.checkData(circle).some(p => p.includes(one.id)) && rules.checkData(circle).some(p => p.includes(two.id)))
+
   // The other half of the same question. A reference can dangle; a number can
   // be outside the domain the engine assumes. The line between the two kinds of
   // wrong book is deliberate: this refuses one the engine cannot run — a zero
