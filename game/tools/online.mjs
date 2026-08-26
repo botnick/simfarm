@@ -11,10 +11,11 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { onScreen } from './lib/onscreen.mjs'
 import { killWith } from '../../server/lib-cleanup.mjs'
+import { freshShots } from './lib/shots.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const W = 600, H = 420
-mkdirSync('shots/online', { recursive: true })
+freshShots('shots/online')
 
 let pass = 0
 const failures = []

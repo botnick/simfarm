@@ -8,7 +8,9 @@
 // everywhere. A button whose text pushes it past the edge is unreachable, and
 // nothing about it throws.
 import puppeteer from 'puppeteer-core'
+import { freshShots } from './lib/shots.mjs'
 
+const SHOTS = freshShots('shots/layout')
 const URL = process.env.URL || 'http://localhost:5180/'
 const W = 600, H = 420
 // A stroke and a drop shadow legitimately sit a pixel or two outside the box.
@@ -131,7 +133,7 @@ for (const lang of ['en', 'th']) {
   await look('the market board', 'Market')
 
   ok(`nothing threw anywhere in ${lang}`, errors.length === 0, [...new Set(errors)].slice(0, 3).join(' | '))
-  await page.screenshot({ path: `shots/layout-${lang}.png` })
+  await page.screenshot({ path: `${SHOTS}/${lang}.png` })
   await page.close()
 }
 

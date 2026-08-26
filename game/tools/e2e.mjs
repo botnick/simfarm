@@ -4,11 +4,11 @@
 // rules engine is perfectly fine.
 import puppeteer from 'puppeteer-core'
 import { mkdirSync } from 'node:fs'
+import { freshShots } from './lib/shots.mjs'
 
 const URL = process.env.URL || 'http://localhost:5180/'
-const SHOTS = 'shots/e2e'
+const SHOTS = freshShots('shots/e2e')
 const W = 600, H = 420
-mkdirSync(SHOTS, { recursive: true })
 
 let pass = 0
 const failures = []

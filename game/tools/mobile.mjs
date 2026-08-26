@@ -2,7 +2,8 @@
 // board really does fill the screen rather than sitting in letterbox bars.
 import puppeteer from 'puppeteer-core'
 import { mkdirSync } from 'node:fs'
-mkdirSync('shots/mobile', { recursive: true })
+import { freshShots } from './lib/shots.mjs'
+freshShots('shots/mobile')
 
 const URL = process.env.URL || 'http://localhost:5180/'
 const DEVICES = [

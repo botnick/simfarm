@@ -13,11 +13,12 @@ import { createServer } from 'node:net'
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { freshShots } from './lib/shots.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const W = 600, H = 420
 const DAYS = Number(process.env.PLAY_DAYS || 24)
-mkdirSync('shots/play', { recursive: true })
+freshShots('shots/play')
 
 let pass = 0
 const failures = []

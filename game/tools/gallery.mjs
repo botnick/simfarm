@@ -1,7 +1,7 @@
 // Captures every screen in a realistic mid-game state, for reviewing the look.
 import puppeteer from 'puppeteer-core'
 import { mkdirSync } from 'node:fs'
-mkdirSync('shots/gallery', { recursive: true })
+import { freshShots } from './lib/shots.mjs'
 
 const lang = process.argv[2] || 'en'
 
@@ -18,6 +18,10 @@ const SHAPES = {
 }
 const shapeName = process.argv[3] || 'desktop'
 const shape = SHAPES[shapeName] ?? SHAPES.desktop
+
+// Only this run's own pictures: the gallery is invoked once per language and
+// device shape, and each one fills a different corner of the same directory.
+freshShots('shots/gallery', `${shapeName}-${lang}-`)
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--disable-gpu'] })
 const p = await b.newPage()
 await p.setViewport({ width: shape.width, height: shape.height, deviceScaleFactor: 2, isMobile: shape.mobile, hasTouch: shape.mobile })
