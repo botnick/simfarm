@@ -307,6 +307,20 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
     breakIt(broken)
     ok(`and ${what}`, rules.checkData(broken).length > 0)
   }
+  // Content the book describes and nothing can hand over. Audited from the
+  // emitting side rather than guessed: a good reaches a barn in exactly two
+  // places, a recipe's output and an animal's produce. A good named by neither
+  // is priced, drawn and unobtainable.
+  const ghost = structuredClone(data)
+  ghost.goods.push({ id: 'ghost', name: { en: 'Ghost', th: 'ผี' }, price: 10, color: '#ffffff' })
+  ok('and a good nothing produces', rules.checkData(ghost).some(p => p.includes('ghost')))
+  // Removing what made one has the same effect, and is the likelier accident.
+  const orphaned = structuredClone(data)
+  const madeBy = orphaned.recipes.find(r => r.output?.good)
+  orphaned.recipes = orphaned.recipes.filter(r => r !== madeBy)
+  ok(`and a good left behind when its recipe goes (${madeBy.output.good})`,
+    rules.checkData(orphaned).some(p => p.includes(madeBy.output.good)))
+
   // The other half of the same question. A reference can dangle; a number can
   // be outside the domain the engine assumes. The line between the two kinds of
   // wrong book is deliberate: this refuses one the engine cannot run — a zero

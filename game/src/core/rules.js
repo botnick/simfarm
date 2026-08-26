@@ -1155,6 +1155,24 @@ export function checkData(data) {
   // silence where a sound should be; and music for a place nobody visits is a
   // file downloaded for nothing. `toolCue.hoe` sat here long after the tool was
   // renamed to `clear`, doing nothing, and nothing said so.
+  // Content nothing can ever hand over.
+  //
+  // Audited from the emitting side rather than guessed at: a good reaches the
+  // barn in exactly two places — a recipe's output and an animal's produce —
+  // and a supply in exactly two — the shop and a recipe's output. A thing named
+  // by neither of its two is a thing the rule book describes, prices, draws and
+  // can never give anybody. That is not a game being hard; it is a book that
+  // cannot do what it says.
+  const madeByRecipe = new Set((data.recipes ?? []).map(r => r.output?.good).filter(Boolean))
+  const laidByAnimal = new Set((data.animals ?? []).map(a => a.produces).filter(Boolean))
+  for (const g of data.goods ?? []) {
+    if (g?.id && !madeByRecipe.has(g.id) && !laidByAnimal.has(g.id)) {
+      problems.push(`nothing produces "${g.id}", so no farm could ever hold one`)
+    }
+  }
+  // Supplies need no equivalent: every one of them must carry a price, which is
+  // checked below, so every supply is buyable and none can be stranded.
+
   const audio = data.audio ?? {}
   const sounds = new Set(audio.sfx ?? [])
   for (const [toolId, cue] of Object.entries(audio.toolCue ?? {})) {
