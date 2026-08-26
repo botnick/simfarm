@@ -23,7 +23,12 @@ const click = async (gx, gy, s=900) => {
   const r = await p.$eval('canvas', c => { const b=c.getBoundingClientRect(); return {x:b.x,y:b.y,w:b.width,h:b.height} })
   await p.mouse.click(r.x + gx/600*r.w, r.y + gy/420*r.h); await wait(s)
 }
-const farm = (e) => p.evaluate(new Function(`const f=window.__game.registry.get('farm'); const s=f?.state; return (${e})`))
+// The state was guarded and the farm itself was not, so the first question
+// asked of a run where no farm opened threw and took the whole check with it —
+// a stack trace instead of a line saying which assertion failed. That is the
+// worst possible moment for it: a deployment nobody can reach is exactly when
+// this tool is what you reach for. (The same fault was in production.mjs.)
+const farm = (e) => p.evaluate(new Function(`const f=window.__game?.registry?.get('farm'); if (!f) return undefined; const s=f.state; return (${e})`))
 const scene = () => p.evaluate(() => window.__game.scene.scenes.filter(x=>x.scene.isActive()).map(x=>x.scene.key).join('+'))
 
 const out = []
