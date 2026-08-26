@@ -952,6 +952,16 @@ export function has(data) {
   }
 }
 
+/**
+ * The moments a milestone can wait for.
+ *
+ * Four of them are handed to `milestoneFor` when they happen; `level` is
+ * decided in `gainXp` instead, because it is the only one that is a threshold
+ * rather than an event. Nothing else awards anything, so nothing else is a
+ * milestone anybody could earn.
+ */
+export const MILESTONE_EVENTS = ['harvest', 'craft', 'animal', 'season', 'level']
+
 export function checkData(data) {
   const problems = []
 
@@ -1201,6 +1211,14 @@ export function checkData(data) {
   for (const m of data.milestones ?? []) {
     if (m?.when === 'level' && !(Number.isSafeInteger(m.level) && m.level > 0)) {
       problems.push(`milestone "${m?.id}" waits for level ${m?.level}, which is not a level`)
+    }
+    // A milestone waits for one of the five things the game announces, and a
+    // book naming a sixth gets a reward nothing can ever hand over: it is not
+    // refused, it is not shown, it simply never happens. Every other dangling
+    // reference in here is caught — a crop that is not a crop, a supply that is
+    // not a supply — and this one was not.
+    if (m != null && !MILESTONE_EVENTS.includes(m.when)) {
+      problems.push(`milestone "${m?.id}" waits for "${m?.when}", which is not something that happens`)
     }
   }
   for (const key of ['startMoney', 'startEnergy', 'startDay', 'travelEnergy', 'feedEnergy']) {

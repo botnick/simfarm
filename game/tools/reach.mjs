@@ -286,6 +286,30 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   // The scene builds this cue's name out of the animal's id, so nothing that
   // reads the source can see it — renaming an animal, or adding one, takes its
   // sound away with no error anywhere. This is the only place that can say so.
+  // Every id in the rule book that points at another id, broken one at a time.
+  // These were checked by hand once and eight of the nine were already caught;
+  // the ninth — a milestone waiting for a moment the game never announces — was
+  // not, and would have been a reward nobody could ever be given. Done as a
+  // sweep rather than nine separate tests so that a rule book growing a tenth
+  // cross-reference is a line here rather than something nobody thinks of.
+  const dangling = {
+    'an animal eating a supply that is not there': d => { d.animals[0].feed = 'unobtainium' },
+    'an animal laying a good that is not there': d => { d.animals[0].produces = 'moonrock' },
+    'a recipe wanting a crop that is not there': d => { d.recipes.find(x => x.inputs.some(i => i.crop)).inputs.find(i => i.crop).crop = 'nocrop' },
+    'a recipe wanting a good that is not there': d => { d.recipes.find(x => x.inputs.some(i => i.good)).inputs.find(i => i.good).good = 'nogood' },
+    'a recipe making a good that is not there': d => { d.recipes.find(x => x.output?.good).output.good = 'nogood' },
+    'a recipe making a supply that is not there': d => { d.recipes.find(x => x.output?.supply).output.supply = 'nosupply' },
+    'a rescue loan naming a crop that is not there': d => { d.rules.rescue.cropId = 'nocrop' },
+    'a milestone waiting for a moment that never comes': d => { d.milestones[0].when = 'never-happens' },
+  }
+  for (const [what, breakIt] of Object.entries(dangling)) {
+    const broken = structuredClone(data)
+    breakIt(broken)
+    ok(`and ${what}`, rules.checkData(broken).length > 0)
+  }
+  // The sweep is only worth having if the book it starts from is sound.
+  eq('the shipped rule book itself has nothing dangling', rules.checkData(data), [])
+
   const mute = structuredClone(data)
   mute.animals[0].id = 'llama'
   ok('and an animal whose noise nothing names',
