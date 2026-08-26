@@ -4,7 +4,7 @@
 // animals or recipes is written here.
 
 import { newMarket, quote, recordSale, refreshMarket, nextUnitPrice } from './market.js'
-import { levelFor, unlockedCropIds } from './progression.js'
+import { levelFor, unlockedCropIds, MAX_LEVEL } from './progression.js'
 
 /**
  * Every number that crosses into the rules has to be a real, whole, sane count.
@@ -1073,6 +1073,17 @@ export function checkData(data) {
       if (!Number.isFinite(r[group][key])) problems.push(`rules.${group}.${key} is ${r[group][key]}, which is not a number`)
     }
   }
+  // A week is divided by and taken a modulo of, every time the board is asked
+  // what week it is. At zero that is Infinity and then NaN, and the farm stops
+  // being describable; below zero the calendar runs backwards. Being a number
+  // is not enough for this one.
+  //
+  // seasonLength is deliberately not here: the night reads it as `if
+  // (seasonLength && ...)`, so zero turns seasons off, which is a rule book
+  // making a choice rather than a rule book that cannot work.
+  if (Number.isFinite(r.market?.weekLength) && !(Number.isSafeInteger(r.market.weekLength) && r.market.weekLength > 0)) {
+    problems.push(`a market week is ${r.market.weekLength} days long, and the board divides by it`)
+  }
   if (!Array.isArray(r.market?.tiers) || !r.market.tiers.length) {
     problems.push('the market has no price tiers, so nothing can be quoted')
   } else {
@@ -1108,6 +1119,7 @@ export function checkData(data) {
     check('crop', c.id, 'days per stage', c.daysPerStage, (v) => whole(v) && v > 0, 'a number of days')
     check('crop', c.id, 'harvests', c.harvests, (v) => whole(v) && v > 0, 'a number of pickings')
     if (c.unlockLevel != null) check('crop', c.id, 'an unlock level', c.unlockLevel, (v) => whole(v) && v > 0, 'a level')
+    if (c.unlockLevel > MAX_LEVEL) problems.push(`crop "${c.id}" unlocks at level ${c.unlockLevel}, and the farm stops at ${MAX_LEVEL}`)
     if (c.pest?.spawnChance != null) check('crop', c.id, 'a pest chance', c.pest.spawnChance, chance, 'a chance between none and certain')
   }
   for (const g of data.goods ?? []) check('good', g.id, 'a price', g.price, (v) => whole(v) && v > 0, 'a price worth selling for')
@@ -1120,6 +1132,7 @@ export function checkData(data) {
     check('animal', a.id, 'a maximum', a.max, (v) => whole(v) && v > 0, 'a number to keep')
     check('animal', a.id, 'a starving chance', a.starveChance, chance, 'a chance between none and certain')
     if (a.unlockLevel != null) check('animal', a.id, 'an unlock level', a.unlockLevel, (v) => whole(v) && v > 0, 'a level')
+    if (a.unlockLevel > MAX_LEVEL) problems.push(`animal "${a.id}" unlocks at level ${a.unlockLevel}, and the farm stops at ${MAX_LEVEL}`)
   }
   for (const tool of data.tools ?? []) check('tool', tool.id, 'an energy cost', tool.energy, whole, 'a cost')
   for (const rec of data.recipes ?? []) {

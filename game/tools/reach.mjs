@@ -307,6 +307,36 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
     breakIt(broken)
     ok(`and ${what}`, rules.checkData(broken).length > 0)
   }
+  // The other half of the same question. A reference can dangle; a number can
+  // be outside the domain the engine assumes. The line between the two kinds of
+  // wrong book is deliberate: this refuses one the engine cannot run — a zero
+  // divisor, a level nothing can ever reach — and leaves a book that runs and
+  // plays harshly to `pace` and `sim`, because a rule book somebody else edits
+  // is allowed to be harsh on purpose.
+  const domains = {
+    'a market week of no days, which the board divides by': d => { d.rules.market.weekLength = 0 },
+    'a market week of negative days': d => { d.rules.market.weekLength = -1 },
+    'a market week that is not a whole number of days': d => { d.rules.market.weekLength = 2.5 },
+    'a crop nothing could ever unlock': d => { d.crops[1].unlockLevel = 1e6 },
+    'an animal nothing could ever unlock': d => { d.animals[0].unlockLevel = 1e6 },
+  }
+  for (const [what, breakIt] of Object.entries(domains)) {
+    const broken = structuredClone(data)
+    breakIt(broken)
+    ok(`and ${what}`, rules.checkData(broken).length > 0)
+  }
+  // And the ones that are a book making a choice rather than a book that cannot
+  // work. Asserted so that tightening the validator has to be deliberate.
+  const allowed = {
+    'a book with seasons turned off': d => { d.rules.market.seasonLength = 0 },
+    'a book whose orders ask for nothing': d => { d.rules.market.orderQuota = 0 },
+  }
+  for (const [what, change] of Object.entries(allowed)) {
+    const other = structuredClone(data)
+    change(other)
+    eq(`but ${what} is allowed`, rules.checkData(other), [])
+  }
+
   // The sweep is only worth having if the book it starts from is sound.
   eq('the shipped rule book itself has nothing dangling', rules.checkData(data), [])
 
