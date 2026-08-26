@@ -21,7 +21,15 @@ const shape = SHAPES[shapeName] ?? SHAPES.desktop
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--disable-gpu'] })
 const p = await b.newPage()
 await p.setViewport({ width: shape.width, height: shape.height, deviceScaleFactor: 2, isMobile: shape.mobile, hasTouch: shape.mobile })
-await p.evaluateOnNewDocument((l) => localStorage.setItem('simfarm.lang', l), lang)
+await p.evaluateOnNewDocument((l) => {
+  localStorage.setItem('simfarm.lang', l)
+  // Not a first-time player. The greeting is real and comes before anything
+  // else, and this tool is here to photograph the game, not to be introduced
+  // to it — it clicked NEW GAME straight into the welcome panel and then threw
+  // on a farm that had never opened, leaving six-hour-old screenshots behind
+  // with nothing to say they were stale.
+  localStorage.setItem('simfarm.greeted', '1')
+}, lang)
 await p.goto('http://localhost:5180/', { waitUntil: 'domcontentloaded', timeout: 60000 })
 await new Promise(r => setTimeout(r, 2500))
 
@@ -43,6 +51,13 @@ const shot = (n) => p.screenshot({ path: `shots/gallery/${shapeName}-${lang}-${n
 await shot('1-menu')
 await click(208, 284, 700)
 
+const started = await p.evaluate(() => !!window.__game?.registry?.get('state'))
+if (!started) {
+  const on = await p.evaluate(() => window.__game.scene.scenes.filter(x => x.scene.isActive()).map(x => x.scene.key).join('+'))
+  console.error(`no farm opened — still on ${on}. The screenshots below would have been whatever was already on disk.`)
+  process.exit(1)
+}
+
 await p.evaluate(() => {
   const g = window.__game, s = g.registry.get('state'), d = g.registry.get('data')
   s.money = 24800; s.energy = 62; s.day = 143
@@ -60,7 +75,10 @@ await p.evaluate(() => {
   s.plots[2].cropId = 'turnip'
   s.plots[2].tiles.forEach(t => { t.stage = 5 })
 })
-await click(547, 364, 300)          // bounce out and back so the farm redraws
+// The field below rebuilds from the state poked in above, so there is nothing
+// to bounce for. This click was aimed at the field's home button and landed on
+// the farm's SAVE — harmless while saving only raised a toast, and not once it
+// answered on a screen of its own.
 await click(158, 263, 600)
 await shot('2-plot')
 await click(45, 378, 450); await shot('3-seeds'); await click(300, 128, 500)
