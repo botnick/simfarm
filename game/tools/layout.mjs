@@ -190,6 +190,54 @@ for (const lang of ['en', 'th']) {
   await click(92, 396, 900)                          // the market
   await look('the market board', 'Market')
 
+  /**
+   * Does the measurement actually catch anything?
+   *
+   * Twice tonight a fault I injected to prove a check works turned out not to
+   * be a fault: the wrap I disabled was not the one those lines used, and the
+   * lines fit unwrapped anyway. "The mutation survived" reads the same whether
+   * the check is weak or the mutation was dead, which makes it worthless as
+   * evidence either way.
+   *
+   * So each case proves it landed before asking whether it was caught, and a
+   * clean board is measured either side of it as a control. Kept here as a
+   * fixed set rather than something edited by hand each time.
+   */
+  const catches = async (what, plant) => {
+    const before = await page.evaluate(OVERFLOWING, W, H, SLACK, TOUCH)
+    if (!ok(`the board is clean before planting ${what}`, before.length === 0,
+      before.map(o => o.text).join(' · '))) return
+    const landed = await page.evaluate(plant, W, H)
+    if (!ok(`${what} is actually on screen`, landed === true, String(landed))) return
+    const after = await page.evaluate(OVERFLOWING, W, H, SLACK, TOUCH)
+    ok(`and ${what} is caught`, after.length > 0, 'the measurement saw nothing wrong')
+    await page.evaluate(() => { window.__planted?.destroy(); window.__planted = null })
+    const cleaned = await page.evaluate(OVERFLOWING, W, H, SLACK, TOUCH)
+    ok(`and the board is clean again once ${what} is gone`, cleaned.length === 0,
+      cleaned.map(o => o.text).join(' · '))
+  }
+
+  await catches('a word too long to wrap', (w) => {
+    const sc = window.__game.scene.scenes.find(s => s.scene.isActive())
+    const t = sc.add.text(w / 2, 200, 'X'.repeat(90), { fontSize: '16px' }).setOrigin(0.5)
+    window.__planted = t
+    return t.visible && t.getBounds().width > 0
+  })
+
+  await catches('a control off the right edge', (w, h) => {
+    const sc = window.__game.scene.scenes.find(s => s.scene.isActive())
+    const z = sc.add.rectangle(w + 40, h / 2, 80, 40, 0x000000, 0.01).setInteractive()
+    window.__planted = z
+    return !!z.input?.enabled && z.getBounds().x > w - 10
+  })
+
+  await catches('a control off the top edge', (w) => {
+    const sc = window.__game.scene.scenes.find(s => s.scene.isActive())
+    const z = sc.add.rectangle(w / 2, -40, 80, 40, 0x000000, 0.01).setInteractive()
+    window.__planted = z
+    return !!z.input?.enabled && z.getBounds().bottom < 20
+  })
+
   ok(`nothing threw anywhere in ${lang}`, errors.length === 0, [...new Set(errors)].slice(0, 3).join(' | '))
   await page.screenshot({ path: shots.path(`${lang}.png`) })
   await page.close()
