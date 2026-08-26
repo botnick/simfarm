@@ -102,10 +102,68 @@ for (const lang of ['en', 'th']) {
       over.map(o => `"${o.text}": ${o.why}`).join(' · '))
   }
 
+  /** Press something by what it says, wherever the panel put it. */
+  const press = async (re, settle = 600) => {
+    const at = await page.evaluate((src) => {
+      const rx = new RegExp(src)
+      for (const sc of window.__game.scene.scenes) {
+        if (!sc.scene.isActive()) continue
+        for (const o of sc.children.list) {
+          if (o.type === 'Text' && o.visible && rx.test(o.text)) return { x: o.x, y: o.y }
+        }
+      }
+      return null
+    }, re.source)
+    if (!at) return false
+    await click(at.x, at.y, settle)
+    return true
+  }
+
+  /**
+   * A panel, measured only once it is actually there.
+   *
+   * `look` asks which scene is up, and a panel is not a scene — so a panel that
+   * failed to open left it measuring the bare screen behind it and reporting
+   * that everything fitted. It did exactly that on the first run of this.
+   */
+  const lookAtPanel = async (what, heading, answer) => {
+    const shown = await page.evaluate(() => window.__game.scene.scenes
+      .filter(s => s.scene.isActive())
+      .flatMap(s => s.children.list.filter(o => o.type === 'Text' && o.visible).map(o => o.text)))
+    if (!ok(`${what} is open`, shown.some(x => heading.test(x)), JSON.stringify(shown.slice(0, 5)))) return
+    const over = await page.evaluate(OVERFLOWING, W, H, SLACK, TOUCH)
+    ok(`${what} keeps everything on the board`, over.length === 0,
+      over.map(o => `"${o.text}": ${o.why}`).join(' · '))
+    ok(`${what} can be answered`, await press(answer), 'nothing answered it')
+  }
+
+  // The panels say the most words of anything in the game, and every one of
+  // them is laid out for English and then translated. Nothing was looking at
+  // them: the walk below only ever visited screens, and a sentence running off
+  // the edge of a panel is exactly what this suite exists to catch.
+  //
+  // The flag is cleared in the page rather than by reloading, because the setup
+  // above re-sets it on every navigation — a reload would put it straight back.
+  await page.evaluate(() => {
+    localStorage.removeItem('simfarm.greeted')
+    window.__game.scene.getScene('Menu').scene.restart()
+  })
+  await new Promise(r => setTimeout(r, 1200))
+  await lookAtPanel('the welcome', /WELCOME|ยินดีต้อนรับ/, /^OK$|^ตกลง$/)
+  await lookAtPanel('the instructions', /HOW TO PLAY|วิธีเล่น/, /GOT IT|เข้าใจแล้ว/)
+
   await look('the title screen', 'Menu')
   await click(208, 284, 1400)
   ok('a farm opens', await scene() === 'Farm', await scene())
   await look('the farm', 'Farm')
+
+  // The report carries the night's news, which is the longest thing any panel
+  // has to fit, and the save confirmation is the one panel a player is most
+  // likely to read carefully.
+  await click(120, 366, 800)
+  await lookAtPanel('the day report', /DAY REPORT|สรุปประจำวัน/, /BACK TO FARM|กลับไร่/)
+  await click(522, 358, 800)
+  await lookAtPanel('the save confirmation', /GAME SAVED|บันทึกแล้ว/, /CONTINUE|เล่นต่อ/)
 
   await click(158, 263, 900)
   ok('a field opens', await scene() === 'Plot', await scene())
