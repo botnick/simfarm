@@ -74,7 +74,12 @@ const OVERFLOWING = (w, h, slack, touch) => {
 
 for (const lang of ['en', 'th']) {
   console.log(`\nlayout: everything on the board, in ${lang}\n`)
-  const page = await browser.newPage()
+  // A context of its own. Pages of one browser share localStorage, so a device
+  // that answered the greeting dismissed it for every device after it — and
+  // those then reported the panel "not on screen", which reads exactly like a
+  // bug on those shapes. The negative result was about the harness.
+  const ctx = await browser.createBrowserContext()
+  const page = await ctx.newPage()
   await page.setViewport({ width: 1200, height: 840 })
   const errors = []
   page.on('console', m => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push(m.text()) })
@@ -96,6 +101,13 @@ for (const lang of ['en', 'th']) {
   // reports a clean bill of health for a screen it never reached.
   const look = async (where, expect) => {
     const at = await scene()
+    // Two scenes at once is not a screen mismatch, it is the harness having
+    // left something running — and it reads as a mismatch, which sends you
+    // looking at the game. Say which it is.
+    if (at.includes('+')) {
+      ok(`${where}: one screen at a time`, false, `${at} are both live — the walk left a scene running`)
+      return
+    }
     if (!ok(`${where} is the screen being looked at`, at === expect, `on ${at}`)) return
     const over = await page.evaluate(OVERFLOWING, W, H, SLACK, TOUCH)
     ok(`${where} keeps everything on the board`, over.length === 0,
@@ -241,6 +253,7 @@ for (const lang of ['en', 'th']) {
   ok(`nothing threw anywhere in ${lang}`, errors.length === 0, [...new Set(errors)].slice(0, 3).join(' | '))
   await page.screenshot({ path: shots.path(`${lang}.png`) })
   await page.close()
+  await ctx.close()
 }
 
 await browser.close()

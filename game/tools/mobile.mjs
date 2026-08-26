@@ -22,7 +22,12 @@ const DEVICES = [
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--disable-gpu'] })
 let bad = 0
 for (const d of DEVICES) {
-  const p = await b.newPage()
+  // A context of its own. Pages of one browser share localStorage, so a device
+  // that answered the greeting dismissed it for every device after it — and
+  // those then reported the panel "not on screen", which reads exactly like a
+  // bug on those shapes. The negative result was about the harness.
+  const ctx = await b.createBrowserContext()
+  const p = await ctx.newPage()
   await p.setViewport({ width: d.width, height: d.height, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await p.evaluateOnNewDocument((up) => {
     localStorage.setItem('simfarm.upright', up ? '1' : '0')
@@ -68,6 +73,7 @@ for (const d of DEVICES) {
     + `  shown=${m.canvas.w}x${m.canvas.h}  screen used=${Math.round(m.coverage * 100)}%  tap->${scene}  ${ok ? 'ok' : 'PROBLEM'}`)
   await p.screenshot({ path: shots.path(`${d.name}.png`) })
   await p.close()
+  await ctx.close()
 }
 await b.close()
 // The run reached the end, so the pictures it took describe this run and are
