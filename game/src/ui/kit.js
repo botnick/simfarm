@@ -239,14 +239,34 @@ export function toast(scene, x, y, text, color = '#ffffff') {
  * button closes it before doing anything, since all of them lead somewhere.
  */
 export function dialog(scene, { heading, lines = [], buttons = [], width = 470, onClose = null }) {
+  // One at a time. A save that answers while the report is open, or a greeting
+  // arriving over a panel the player opened themselves, would otherwise stack
+  // two of these and leave the lower one unreachable underneath.
+  if (scene.__modal) return scene.__modal
   const parts = []
   const keep = (...o) => { o.forEach(x => { x.setDepth?.(9000); parts.push(x) }); return o[0] }
-  const close = () => { parts.forEach(o => o.destroy()); onClose?.() }
+  let shut = false
+  const close = () => {
+    // Idempotent: a button closes, then acts, and what it does may close again.
+    if (shut) return
+    shut = true
+    if (scene.__modal === close) scene.__modal = null
+    parts.forEach(o => o.destroy())
+    onClose?.()
+  }
+  scene.__modal = close
+  // Leaving the screen takes the panel with it, and puts the shortcuts back.
+  scene.events.once('shutdown', close)
 
   const rows = Math.max(1, lines.filter(Boolean).length)
   const height = 108 + rows * 30 + (buttons.length ? 44 : 0)
   const left = WIDTH / 2 - width / 2
   const top = Math.max(18, HEIGHT / 2 - height / 2)
+
+  // A panel arriving is a change of screen, and every other change of screen in
+  // this game says so. Opening one in silence was the only place the interface
+  // moved without a sound.
+  sfx(scene, 'screen-change', { volume: 0.7 })
 
   // Swallows every click behind it, so the farm cannot be played through it.
   keep(scene.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.62).setOrigin(0).setInteractive())
@@ -268,7 +288,9 @@ export function dialog(scene, { heading, lines = [], buttons = [], width = 470, 
   buttons.forEach((b, i) => {
     const span = buttons.length * (wide + 12) - 12
     const x = WIDTH / 2 - span / 2 + wide / 2 + i * (wide + 12)
-    keep(button(scene, x, top + height - 28, wide, 30, b.text, () => { close(); b.go?.() },
+    // Returned, not dropped: `go` may be async, and swallowing its promise means
+    // a rejection inside it is never seen by the boundary that reports these.
+    keep(button(scene, x, top + height - 28, wide, 30, b.text, () => { close(); return b.go?.() },
       { tone: b.tone ?? 'green', size: 12 }))
   })
   return close

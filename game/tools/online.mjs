@@ -414,6 +414,13 @@ eq('an edited board is replaced by the server\'s', reread, (await serverState())
   await new Promise(r => setTimeout(r, 2400))
   eq('the game comes back to the menu', await scene(), 'Menu')
   await click(392, 284, 1400)                                // LOAD GAME
+  // It shows which farm it found first — the envelope is signed rather than
+  // hidden, so the browser can read the day and the money off it well enough
+  // to label the choice. The server still checks the signature on Continue.
+  const shown = await texts()
+  ok('the resume screen names the farm it found',
+    shown.some(t => /YOUR FARM|ไร่ของคุณ/.test(t)), JSON.stringify(shown.slice(0, 6)))
+  await press(/CONTINUE|เล่นต่อ/, 1400)
   eq('loading opens the farm', await scene(), 'Farm')
   eq('and it is the same day', await farm('s.day'), day)
   eq('with the money it had when the page went', await farm('s.money'), played)
@@ -433,6 +440,7 @@ eq('an edited board is replaced by the server\'s', reread, (await serverState())
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
   await new Promise(r => setTimeout(r, 2400))
   await click(392, 284, 1600)
+  await press(/CONTINUE|เล่นต่อ/, 1400)                        // say yes to the farm it found
   eq('and can be loaded a second time', await scene(), 'Farm')
   eq('with what was played after the first load', await farm('s.money'), playedOn)
 }

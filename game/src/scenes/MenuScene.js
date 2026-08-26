@@ -87,9 +87,12 @@ export default class MenuScene extends Phaser.Scene {
       // A sealed save belongs to the server and is handed back untouched; a
       // plain one is a farm this browser can play by itself.
       const sealed = loadSealed()
-      // Online the envelope is the server's and this browser cannot read it, so
-      // there is nothing to show; the farm itself arrives from the server.
-      if (sealed) return this.begin(null, sealed)
+      // The envelope is signed, not sealed shut: the browser can read the farm
+      // inside it well enough to say which one it is about to open. What it
+      // shows is only a label — the server checks the signature on resume and
+      // decides — but a player choosing whether to continue deserves to see the
+      // day and the money either way, not only when playing offline.
+      if (sealed) return this.askToResume(sealed.save?.state, () => this.begin(null, sealed))
       const s = load()
       if (s) return this.askToResume(s, () => this.resume(s))
       // Nothing openable: the button is disabled in that case, so reaching here
@@ -157,7 +160,6 @@ export default class MenuScene extends Phaser.Scene {
     let seen = false
     try { seen = localStorage.getItem(GREETED) === '1' } catch { seen = true }
     if (seen) return
-    try { localStorage.setItem(GREETED, '1') } catch { /* private mode */ }
     const d = this.registry.get('data')
     dialog(this, {
       heading: t('welcome.title'),
@@ -165,7 +167,16 @@ export default class MenuScene extends Phaser.Scene {
         d.rules.endDay ? t('welcome.goalYear', d.rules.endDay) : t('welcome.goal'),
         t('welcome.name'),
       ],
-      buttons: [{ text: t('welcome.ok'), go: () => this.howToPlay() }],
+      // Marked when it has actually been read, not when it was put on screen.
+      // Written first, a reload while it was open would have counted as having
+      // been greeted, and the instructions it leads into would never be shown.
+      buttons: [{
+        text: t('welcome.ok'),
+        go: () => {
+          try { localStorage.setItem(GREETED, '1') } catch { /* private mode */ }
+          this.howToPlay()
+        },
+      }],
     })
   }
 

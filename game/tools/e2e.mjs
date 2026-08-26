@@ -286,6 +286,35 @@ eq('water-all waters every tile', watered, rules.tilesPerPlot)
 eq('watering costs one energy per tile', await read('s.energy'), energyBeforeWater - rules.tilesPerPlot)
 await shot('05-watered')
 
+/* --------------------------------- a panel that is waiting owns the keyboard */
+// The panel darkens the screen and swallows clicks, which looked like enough
+// and was not: the shortcuts are bound on the window, so with the day report
+// open Enter still ended a day, the number keys still walked into a field, and
+// Escape still left the screen with the panel sitting on it.
+{
+  await click(547, 364, 700)                        // home, to the farm
+  check('the farm is where this starts', await scene() === 'Farm', await scene())
+  const dayBefore = await read('s.day')
+
+  await click(120, 366, 700)                        // the plaque opens the report
+  const open = await texts()
+  check('the report is open', open.some(x => /DAY REPORT|สรุปประจำวัน/.test(x)), JSON.stringify(open.slice(0, 4)))
+
+  await page.keyboard.press('Enter'); await wait(800)
+  eq('Enter does not end a day behind it', await read('s.day'), dayBefore)
+  await page.keyboard.press('1'); await wait(600)
+  eq('the number keys do not walk into a field', await scene(), 'Farm')
+  await page.keyboard.press('Escape'); await wait(600)
+  eq('and Escape does not leave the panel behind', await scene(), 'Farm')
+
+  // And they come back. A lock that is never released is the same bug wearing
+  // the other face.
+  await press(/BACK TO FARM|กลับไร่/, 600)
+  await page.keyboard.press('1'); await wait(700)
+  eq('once it is answered the shortcuts work again', await scene(), 'Plot')
+  // Left in the field, which is where the section below picks up.
+}
+
 /* ------------------------------------------- the pointer is the tool */
 // The original changed the mouse pointer to whatever you were about to do, and
 // it is most of what makes a field feel like a field: you are holding a
@@ -1334,6 +1363,10 @@ eq('a fed flock lays overnight', await read(`s.barn.goods['${animal.produces}'] 
   check('and the farmer keeps only what is left over',
     await read('s.money') - moneyBefore >= 0, `${moneyBefore} -> ${await read('s.money')}`)
   await poke('s.debt = 0')
+  // A night that had to lend the farm a seed opens the report by itself — it is
+  // the one thing the game does on the player's behalf. Answer it, as a player
+  // would, or it sits there owning the keyboard for everything below.
+  await press(/BACK TO FARM|กลับไร่/, 500)
 }
 
 /* ------------------------------------------------ getting about by keyboard */
