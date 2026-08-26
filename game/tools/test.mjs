@@ -1327,5 +1327,81 @@ const fresh = (level = null) => {
   ok('and the game plays some cues at all, or this proves nothing', played.size > 5, `${played.size}`)
 }
 
+/* ------------------------------------- a broke farm has to be able to recover */
+{
+  // The rescue seed is a loan. A farm with nothing left is given one and owes
+  // its price, repaid off the top of the next sale. That promise only holds if
+  // what the seed grows is worth more than the seed — and nothing had ever
+  // checked that it is.
+  //
+  // The shape this is for: rescue, plant, grow, sell, the whole sale goes to
+  // the debt, broke again, rescue again. Every state along that loop is valid,
+  // every day has something to do, and the fuzzer's escape check stays green
+  // forever while the player gets nowhere. It matters more now than it did,
+  // because this codebase is meant to be reused with a smaller rule book, and
+  // the loop is a property of whichever crop that book names as the rescue.
+  const broke = (d) => {
+    const s = newGame(d)
+    s.money = 0
+    s.seeds = {}
+    s.barn = { crops: {}, goods: {} }
+    s.plots.forEach(p => { p.cropId = null; p.tiles.forEach(t => { t.stage = d.rules.stage.empty; t.age = 0; t.watered = 0; t.pest = 0; t.picked = 0 }) })
+    // And the market already flooded, so the sale it recovers on is priced at
+    // the worst tier rather than the best.
+    const worst = d.rules.market.tiers[d.rules.market.tiers.length - 1]
+    for (const c of d.crops) s.market.sold[c.id] = (worst.upTo ?? 96) + 24
+    return s
+  }
+
+  /** The dullest competent farmer: pick, clear, sell, sow the cheapest, water. */
+  const farmFor = (s, d, days) => {
+    const rng = () => 0.5
+    let rescues = 0
+    for (let i = 0; i < days; i++) {
+      for (let p = 0; p < s.plots.length; p++) { rules.harvestPlot(s, d, p); rules.clearPlot(s, d, p) }
+      for (const [id, n] of Object.entries(s.barn.crops)) if (n > 0) rules.sellCrop(s, d, id, n)
+      const affordable = d.crops
+        .filter(c => (c.unlockLevel ?? 1) <= rules.levelOf(s, d))
+        .sort((a, b) => a.seedPrice - b.seedPrice)
+      for (let p = 0; p < s.plots.length; p++) {
+        for (const c of affordable) {
+          if (!(s.seeds[c.id] > 0) && !rules.buySeed(s, d, c.id)) continue
+          if (rules.plant(s, d, p, c.id)) break
+        }
+      }
+      for (let p = 0; p < s.plots.length; p++) rules.waterPlot(s, d, p)
+      const before = s.debt ?? 0
+      const report = endDay(s, d, rng)
+      if (report?.rescued) rescues++
+      void before
+    }
+    return rescues
+  }
+
+  const cheapest = data.crops.filter(c => (c.unlockLevel ?? 1) <= 1).sort((a, b) => a.seedPrice - b.seedPrice)[0]
+  const cycle = (cheapest.daysPerStage ?? 1) * R.stage.ripe
+  const horizon = cycle * 2 + 7
+
+  const s = broke(data)
+  ok('a farm with nothing is offered the loan', rules.needsRescue(s, data))
+  const rescues = farmFor(s, data, horizon)
+  ok('and farming its way out clears the debt', (s.debt ?? 0) === 0, `owes ${s.debt} after ${horizon} days`)
+  ok('and can buy its own next seed without asking again',
+    s.money >= cheapest.seedPrice, `has ${s.money}, a seed costs ${cheapest.seedPrice}`)
+  ok('so the loan was a way out and not a treadmill', rescues <= 2, `took the loan ${rescues} times`)
+
+  // And the same farm on a rule book where the rescue crop cannot pay for
+  // itself, which is the regression this is really guarding.
+  const poor = structuredClone(data)
+  const rescueCrop = poor.crops.find(c => c.id === poor.rules.rescue.cropId) ?? poor.crops[0]
+  rescueCrop.sellPrice = 1
+  for (const c of poor.crops) if ((c.unlockLevel ?? 1) <= 1) c.sellPrice = 1
+  const doomed = broke(poor)
+  const spun = farmFor(doomed, poor, horizon)
+  ok('a rule book whose cheap crop cannot repay its own seed is caught',
+    (doomed.debt ?? 0) > 0 || doomed.money < rescueCrop.seedPrice || spun > 2,
+    `owes ${doomed.debt}, holds ${doomed.money}, took the loan ${spun} times`)
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

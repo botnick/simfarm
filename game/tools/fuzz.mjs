@@ -17,6 +17,8 @@
 // replayed. The generator is deterministic for a given seed.
 import { readFileSync } from 'node:fs'
 import * as rules from '../src/core/rules.js'
+import { weekOf } from '../src/core/market.js'
+import { MAX_LEVEL } from '../src/core/progression.js'
 
 const data = JSON.parse(readFileSync(new URL('../public/data/game.json', import.meta.url), 'utf8'))
 const R = data.rules
@@ -118,7 +120,44 @@ function wrong(state) {
   }
   for (const [id, n] of Object.entries(state.market?.sold ?? {})) {
     if (!counter(n)) return `the market has sold ${n} of ${id}`
+    if (!rules.cropById(data, id)) return `the market has sold ${n} of "${id}", which does not exist`
   }
+
+  // Shape is not the same as sense. Everything above asks whether the farm can
+  // still be described; these ask whether what it describes is a game. A number
+  // that is a perfectly good number can still be an unfair one, and none of the
+  // checks above would notice.
+  if (state.market) {
+    const should = weekOf(state.day, data.rules)
+    if (state.market.week !== should) return `it is day ${state.day}, week ${should}, and the board says week ${state.market.week}`
+    const orders = state.market.orders ?? []
+    if (orders.length > data.rules.market.orderCount) {
+      return `the board is showing ${orders.length} orders and holds ${data.rules.market.orderCount}`
+    }
+    const ids = orders.map(o => o.cropId)
+    if (new Set(ids).size !== ids.length) return `the board wants the same crop twice: ${ids.join(', ')}`
+  }
+  for (const job of state.pending ?? []) {
+    // A batch with no days left is one the night will never finish and nothing
+    // will ever deliver: it sits in the pot for the rest of the game.
+    if (job.daysLeft < 1) return `a batch of "${job.id}" has ${job.daysLeft} days left and will never be done`
+  }
+  for (const [i, plot] of state.plots.entries()) {
+    const crop = plot.cropId != null ? rules.cropById(data, plot.cropId) : null
+    for (const t of plot.tiles) {
+      // Flags, not counts. Watered twice is not wetter, and it is the kind of
+      // thing a bulk action can do that a single one cannot.
+      if (t.watered !== 0 && t.watered !== 1) return `field ${i} has a tile watered ${t.watered} times`
+      if (t.pest !== 0 && t.pest !== 1) return `field ${i} has a tile with ${t.pest} pests on it`
+      if (crop && t.picked > (crop.harvests ?? 1)) {
+        return `field ${i} has a tile picked ${t.picked} times from a crop that gives ${crop.harvests ?? 1}`
+      }
+    }
+  }
+  const level = rules.levelOf(state, data)
+  if (!Number.isSafeInteger(level) || level < 1 || level > MAX_LEVEL) return `the farm is level ${level}`
+  const earned = state.milestones ?? []
+  if (new Set(earned).size !== earned.length) return `the same milestone was earned twice: ${earned.join(', ')}`
   return null
 }
 
@@ -155,6 +194,9 @@ function moves(state, rng) {
   void level
   return out
 }
+
+// The two rules that answer with an amount rather than with yes or no.
+const KEEPS_NOTHING = /^sell(Crop|Good)/
 
 const SEEDS = Number(process.env.FUZZ_SEEDS || 12)
 const DAYS = Number(process.env.FUZZ_DAYS || 400)
@@ -194,10 +236,40 @@ for (let seed = 1; seed <= SEEDS && !broke; seed++) {
     const legal = moves(state, rng)
     for (let i = 0; i < PER_DAY; i++) {
       const [what, run] = pick(legal)
-      try { run() } catch (err) {
+      // Kept as text rather than a clone: this runs millions of times, and the
+      // comparison it is for is an equality one.
+      const before = JSON.stringify(state)
+      const was = { day: state.day, xp: state.xp, earned: state.earned, bestSeason: state.bestSeason }
+      let answer
+      try { answer = run() } catch (err) {
         broke = `seed ${seed}, day ${day}: ${what} threw ${err.message}`
         break
       }
+
+      // A refusal has to be nothing happening. A rule that says no after it has
+      // already taken the money, or spent the energy, or emptied half a field,
+      // leaves a farm that is still perfectly describable — so everything below
+      // would pass it, and online the server's transaction would hide it. Only
+      // an offline farm keeps the damage, and only this notices.
+      // Selling answers with the money kept, not with whether it happened, and
+      // a sale whose whole value went to paying off the rescue loan keeps
+      // nothing while certainly having happened. So zero is only a refusal for
+      // the rules where zero means nothing was done.
+      const refused = answer === false || (answer === 0 && !KEEPS_NOTHING.test(what))
+      if (refused && JSON.stringify(state) !== before) {
+        broke = `seed ${seed}, day ${day}: ${what} was refused and changed the farm anyway`
+        break
+      }
+
+      // Nothing a player does during a day moves the calendar; only the night
+      // does. And the three records of what a farm has ever done only ever go
+      // up — a total that can fall is a total that can be farmed.
+      if (state.day !== was.day) { broke = `seed ${seed}, day ${day}: ${what} moved the calendar to day ${state.day}`; break }
+      for (const k of ['xp', 'earned', 'bestSeason']) {
+        if (state[k] < was[k]) { broke = `seed ${seed}, day ${day}: ${what} took ${k} from ${was[k]} down to ${state[k]}`; break }
+      }
+      if (broke) break
+
       const bad = wrong(state)
       if (bad) { broke = `seed ${seed}, day ${day}, after ${what}: ${bad}`; break }
     }
