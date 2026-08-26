@@ -13,6 +13,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { killWith } from './lib-cleanup.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DATA = JSON.parse(await import('node:fs').then(fs => fs.readFileSync(join(HERE, '../game/public/data/game.json'), 'utf8')))
@@ -39,14 +40,14 @@ const SECRET = 'a-secret-that-outlives-the-process'
 /** Start a server that shares the ledger file and the signing secret. */
 async function boot(ledgerFile) {
   const port = await freePort()
-  const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+  const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
     env: {
       ...process.env, PORT: String(port), SIMFARM_SECRET: SECRET,
       SIMFARM_ENDDAY_MS: '0', SIMFARM_SESSION_RATE_MAX: '10000',
       ...(ledgerFile ? { SIMFARM_LEDGER_FILE: ledgerFile } : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  }))
   child.stderr.resume()
   await new Promise((resolve, reject) => {
     child.stdout.on('data', d => String(d).includes('farm server') && resolve())

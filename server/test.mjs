@@ -7,6 +7,7 @@ import { request as httpRequest } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { killWith } from '../server/lib-cleanup.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 // Ask the OS for a free port, so a server left running by an earlier run
@@ -30,7 +31,7 @@ const ok = (name, cond, detail = '') => {
 }
 const eq = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
 
-const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
   // No end-day cooldown in tests: the throttle has its own case below.
   // No cooldowns in tests; the throttles have their own cases below, which set
   // their own timings.
@@ -39,7 +40,7 @@ const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
     SIMFARM_ENDDAY_MS: '0', SIMFARM_IDLE_DAY_MS: '0', SIMFARM_SESSION_RATE_MAX: '10000',
   },
   stdio: ['ignore', 'pipe', 'inherit'],
-})
+}))
 await new Promise((resolve, reject) => {
   child.stdout.on('data', (d) => String(d).includes('farm server') && resolve())
   setTimeout(() => reject(new Error('server did not start')), 8000)
@@ -594,10 +595,10 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   // a warning at deploy time is a warning nobody reads. Strict mode refuses to
   // start rather than run with a choice nobody made.
   const boot = (env) => new Promise((resolve) => {
-    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_STRICT: '1', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
     let out = ''
     child.stdout.on('data', d => { out += d })
     child.stderr.on('data', d => { out += d })
@@ -630,11 +631,11 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   // refuse them. Saying REFUSED and then starting is a worse habit to teach than
   // any setting it is complaining about.
   const relaxed = await new Promise((resolve) => {
-    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_STRICT: '', SIMFARM_SECRET: 'short',
         SIMFARM_LEDGER_FILE: '', SIMFARM_ORIGIN: '', SIMFARM_HOST_KEY: '', SIMFARM_TEST_HOOKS: '' },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
     let out = ''
     child.stdout.on('data', d => { out += d })
     child.stderr.on('data', d => { out += d })
@@ -662,11 +663,11 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
     probe.listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => r(port)) })
   })
   const HOST_KEY = 'the-host-and-only-the-host'
-  const guarded = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+  const guarded = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
     env: { ...process.env, PORT: String(port), SIMFARM_SECRET: 'guarded'.padEnd(48, '-'), SIMFARM_ENDDAY_MS: '0',
       SIMFARM_SESSION_RATE_MAX: '10000', SIMFARM_HOST_KEY: HOST_KEY },
     stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  }))
   guarded.stderr.resume()
   await new Promise((resolve, reject) => {
     guarded.stdout.on('data', d => String(d).includes('farm server') && resolve())
@@ -1008,10 +1009,10 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   const long = 'k'.repeat(40)
 
   const boot = (file) => new Promise((resolve) => {
-    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_LEDGER_FILE: file, SIMFARM_STRICT: '' },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
     let out = ''
     child.stdout.on('data', d => { out += d })
     child.stderr.on('data', d => { out += d })
@@ -1152,10 +1153,10 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   const long = 'clocks'.padEnd(48, '-')
   const seal = (save) => createHmac('sha256', long).update(JSON.stringify(save)).digest('hex')
 
-  const child2 = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+  const child2 = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
     env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_ENDDAY_MS: '60', SIMFARM_STRICT: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  }))
   const url = await new Promise((resolve, reject) => {
     let out = ''
     const watch = (d) => {
@@ -1226,10 +1227,10 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   const bootWith = (book) => new Promise((resolve) => {
     const file = join(dir, `${Math.random().toString(36).slice(2)}.json`)
     writeFileSync(file, JSON.stringify(book))
-    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_DATA: file, SIMFARM_STRICT: '' },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
     let out = ''
     child.stdout.on('data', d => { out += d })
     child.stderr.on('data', d => { out += d })
@@ -1276,10 +1277,10 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   const long = 'k'.repeat(40)
 
   const boot = async (env) => {
-    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_SECRET: long, SIMFARM_ENDDAY_MS: '0', SIMFARM_STRICT: '', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
     const url = await new Promise((resolve, reject) => {
       let out = ''
       // Both streams: a server that refuses to start says why on stderr, and
@@ -1352,12 +1353,12 @@ ok('a made-up session is refused', (await get('/state', 'deadbeef')).status === 
   // is NaN, which loses every comparison it is in.
   const long = 'k'.repeat(40)
   const boot = (env) => new Promise((resolve) => {
-    const child = spawn(process.execPath, [join(HERE, 'index.mjs')], {
+    const child = killWith(spawn(process.execPath, [join(HERE, 'index.mjs')], {
       env: { ...process.env, PORT: '0', SIMFARM_STRICT: '1', SIMFARM_SECRET: long,
         SIMFARM_LEDGER_FILE: '/tmp/simfarm-ttl-test.json', SIMFARM_ORIGIN: 'https://a.b',
         SIMFARM_HOST_KEY: long, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
     let out = ''
     child.stdout.on('data', d => { out += d })
     child.stderr.on('data', d => { out += d })

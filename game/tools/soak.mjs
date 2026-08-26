@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { farmLimits } from '../src/core/rules.js'
+import { killWith } from '../../server/lib-cleanup.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DATA = JSON.parse(readFileSync(join(HERE, '../public/data/game.json'), 'utf8'))
@@ -31,10 +32,10 @@ const port = await new Promise((resolve) => {
   probe.listen(0, '127.0.0.1', () => { const { port } = probe.address(); probe.close(() => resolve(port)) })
 })
 const BASE = `http://127.0.0.1:${port}`
-const child = spawn(process.execPath, [join(HERE, '../../server/index.mjs')], {
+const child = killWith(spawn(process.execPath, [join(HERE, '../../server/index.mjs')], {
   env: { ...process.env, PORT: String(port), SIMFARM_SECRET: 'soak'.padEnd(48, '-'), SIMFARM_ENDDAY_MS: '0', SIMFARM_IDLE_DAY_MS: '0', SIMFARM_SESSION_RATE_MAX: '10000' },
   stdio: ['ignore', 'pipe', 'inherit'],
-})
+}))
 await new Promise((resolve, reject) => {
   child.stdout.on('data', d => String(d).includes('farm server') && resolve())
   setTimeout(() => reject(new Error('server did not start')), 8000)

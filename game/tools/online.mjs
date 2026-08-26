@@ -10,6 +10,7 @@ import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { onScreen } from './lib/onscreen.mjs'
+import { killWith } from '../../server/lib-cleanup.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const W = 600, H = 420
@@ -31,10 +32,10 @@ const port = await new Promise((resolve) => {
 })
 const SERVER = `http://127.0.0.1:${port}`
 
-const server = spawn(process.execPath, [join(HERE, '../../server/index.mjs')], {
+const server = killWith(spawn(process.execPath, [join(HERE, '../../server/index.mjs')], {
   env: { ...process.env, PORT: String(port), SIMFARM_SECRET: 'online-test'.padEnd(48, '-'), SIMFARM_ENDDAY_MS: '0', SIMFARM_TEST_HOOKS: '1', SIMFARM_SESSION_RATE_MAX: '10000' },
   stdio: ['ignore', 'pipe', 'inherit'],
-})
+}))
 await new Promise((resolve, reject) => {
   server.stdout.on('data', (d) => String(d).includes('farm server') && resolve())
   setTimeout(() => reject(new Error('server did not start')), 8000)
