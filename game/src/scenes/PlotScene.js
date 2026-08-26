@@ -56,6 +56,9 @@ export default class PlotScene extends Phaser.Scene {
     // Opening a screen is the moment to make sure what is drawn is what the
     // authority actually holds.
     if (this.farm.online) whileHere(this, this.farm, () => this.refresh())
+    // Leaving by any route — the home button, Escape, the game ending — has to
+    // put the pointer back, or the watering can follows the player to the shop.
+    this.events.once('shutdown', () => this.dropTool())
   }
 
   bindShortcuts() {
@@ -322,11 +325,39 @@ export default class PlotScene extends Phaser.Scene {
     parts.push({ destroy: () => rowParts.forEach(o => o.destroy()) })
   }
 
+  /**
+   * The pointer becomes the tool.
+   *
+   * The original did this and it is most of what makes a field feel like a
+   * field: you are holding a watering can, not choosing a radio button. The
+   * toolbar ring says which tool is selected, but only after you look away from
+   * where you are working.
+   *
+   * A browser refuses a cursor image over 128px and silently falls back to an
+   * arrow, which is why these are their own smaller copies rather than the
+   * toolbar art.
+   */
+  showTool() {
+    const id = this.tool
+    if (this.shownCursor === id) return
+    this.shownCursor = id
+    // The hotspot sits at the middle: these are objects being held over a tile,
+    // not arrows pointing at one.
+    this.input.setDefaultCursor(`url(assets/cursors/${id}.png) 22 22, pointer`)
+  }
+
+  /** Hand the arrow back, or it follows the player out of the field. */
+  dropTool() {
+    this.shownCursor = null
+    this.input.setDefaultCursor('default')
+  }
+
   sfx(name) { sfx(this, name) }
 
   /* -------------------------------------------------------------- refresh */
 
   refresh() {
+    this.showTool()
     const s = this.state, r = this.data_.rules
     const plot = s.plots[this.plotIndex]
     const crop = plot.cropId ? cropById(this.data_, plot.cropId) : null

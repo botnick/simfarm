@@ -68,6 +68,12 @@ export default class MenuScene extends Phaser.Scene {
         : t('menu.summaryEndless', data.crops.length, data.recipes.length, data.rules.plots),
       { size: 11, color: C.ink })
 
+    // Below the panel, clear of NEW GAME and LOAD GAME. The original explained
+    // itself on a screen of its own and this game explained itself nowhere, so
+    // a first-time player had to work out what a farm wanted from them.
+    button(this, WIDTH / 2, 330, 150, 26, t('menu.howToPlay'), () => this.howToPlay(),
+      { tone: 'wood', size: 11 })
+
     const newBtn = button(this, WIDTH / 2 - 92, 284, 170, 34, t('menu.newGame'), () => this.begin(newGame(data, { name: this.farmName })), { size: 14 })
     const loadBtn = button(this, WIDTH / 2 + 92, 284, 170, 34, t('menu.loadGame'), () => {
       // A sealed save belongs to the server and is handed back untouched; a
@@ -120,6 +126,37 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   /** Name entry rides on a hidden DOM input so mobile keyboards work. */
+  /**
+   * What the farm wants from you, on one screen.
+   *
+   * A modal over the title rather than a scene of its own: it is read once and
+   * dismissed, it has nothing to remember, and a scene would need registering,
+   * a way back, and a place in the frame map for no gain.
+   */
+  howToPlay() {
+    if (this.helpOpen) return
+    this.helpOpen = true
+    const parts = []
+    const add = (...o) => { o.forEach(x => { x.setDepth?.(9000); parts.push(x) }); return o[0] }
+    const close = () => { parts.forEach(o => o.destroy()); this.helpOpen = false }
+
+    add(this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.62).setOrigin(0).setInteractive()
+      .on('pointerup', close))
+    const W = 470, H = 300, left = WIDTH / 2 - W / 2, top = HEIGHT / 2 - H / 2
+    add(panel(this, left, top, W, H))
+    add(title(this, WIDTH / 2, top + 26, t('help.title'), { size: 16 }))
+
+    // Wrapped to the panel rather than the stage: Thai runs longer than English
+    // almost everywhere, and a line laid out for one overflows for the other.
+    let y = top + 56
+    for (const key of ['help.line1', 'help.line2', 'help.line3', 'help.line4', 'help.line5']) {
+      const line = add(label(this, left + 22, y, t(key), { size: 11, color: C.ink }))
+      line.setWordWrapWidth(W - 44)
+      y += Math.max(28, line.displayHeight + 12)
+    }
+    add(button(this, WIDTH / 2, top + H - 26, 150, 28, t('help.close'), close, { size: 12 }))
+  }
+
   focusName() {
     let el = document.getElementById('farmname')
     if (!el) {

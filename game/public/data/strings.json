@@ -188,7 +188,15 @@
     "farm.seasonBest": "your best season yet",
     "farm.seasonBeat": "your best is $ {0}",
     "fatal.notice": "Something went wrong and this screen may not work. Reloading usually fixes it.",
-    "fatal.reload": "Reload"
+    "fatal.reload": "Reload",
+    "menu.howToPlay": "HOW TO PLAY",
+    "help.title": "HOW TO PLAY",
+    "help.line1": "Every day, look after your farm: sow a field, water it, and pick it when it is ripe.",
+    "help.line2": "Sell what you grow at the village shop. Orders on the market board pay more than the plain price.",
+    "help.line3": "Animals lay every day if you feed them. The workshop turns crops into goods worth more.",
+    "help.line4": "Everything you do costs energy, and the night gives it back. End the day when there is nothing left to do.",
+    "help.line5": "Levelling up unlocks new crops and animals. Watch for bugs and dead plants — clear them or the field is stuck.",
+    "help.close": "GOT IT"
   },
   "th": {
     "lang.name": "ไทย",
@@ -378,6 +386,14 @@
     "farm.seasonBest": "ดีที่สุดเท่าที่เคยทำมา",
     "farm.seasonBeat": "สถิติเดิม $ {0}",
     "fatal.notice": "มีบางอย่างผิดพลาด หน้านี้อาจใช้งานไม่ได้ ลองโหลดใหม่ดูครับ",
-    "fatal.reload": "โหลดใหม่"
+    "fatal.reload": "โหลดใหม่",
+    "menu.howToPlay": "วิธีเล่น",
+    "help.title": "วิธีเล่น",
+    "help.line1": "ทุกวันดูแลไร่ของคุณ: หว่านเมล็ดลงแปลง รดน้ำ แล้วเก็บเกี่ยวเมื่อผลผลิตพร้อม",
+    "help.line2": "ขายผลผลิตที่ร้านในหมู่บ้าน ออร์เดอร์บนกระดานตลาดจ่ายแพงกว่าราคาปกติ",
+    "help.line3": "สัตว์จะให้ผลผลิตทุกวันถ้าให้อาหาร โรงงานแปรรูปพืชเป็นของที่ขายได้แพงขึ้น",
+    "help.line4": "ทุกอย่างที่ทำใช้พลังงาน และคืนให้ตอนกลางคืน จบวันเมื่อไม่เหลืออะไรให้ทำแล้ว",
+    "help.line5": "เลเวลขึ้นจะปลดล็อกพืชและสัตว์ใหม่ ระวังแมลงกับต้นไม้ตาย ต้องถางออกไม่งั้นแปลงจะใช้ไม่ได้",
+    "help.close": "เข้าใจแล้ว"
   }
 }

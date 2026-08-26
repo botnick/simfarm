@@ -68,6 +68,11 @@ const click = async (gx, gy, settle = 300) => {
   await wait(settle)
   stopIfBroken(`clicking ${gx},${gy}`)
 }
+const moveOnStage = async (gx, gy) => {
+  const b = await page.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+  await page.mouse.move(b.x + (gx / W) * b.w, b.y + (gy / H) * b.h)
+  await wait(140)
+}
 const read = (expr) => page.evaluate(new Function(`
   const g = window.__game, s = g.registry.get('state'), d = g.registry.get('data');
   const quoteCropForTest = (id, n) => g.__rules.quoteCrop(s, d, id, n).total;
@@ -260,6 +265,39 @@ const watered = await read('s.plots[0].tiles.filter(t => t.watered).length')
 eq('water-all waters every tile', watered, rules.tilesPerPlot)
 eq('watering costs one energy per tile', await read('s.energy'), energyBeforeWater - rules.tilesPerPlot)
 await shot('05-watered')
+
+/* ------------------------------------------- the pointer is the tool */
+// The original changed the mouse pointer to whatever you were about to do, and
+// it is most of what makes a field feel like a field: you are holding a
+// watering can, not choosing a radio button. A browser silently refuses a
+// cursor image over 128 pixels and shows an arrow instead, so this asserts the
+// pointer the page is actually wearing rather than that a file exists.
+{
+  const pointer = () => page.evaluate(() =>
+    document.querySelector('canvas').style.cursor
+    || getComputedStyle(document.querySelector('canvas')).cursor)
+
+  const tools = await read('d.tools.map(t => t.id)')
+  const seen = []
+  for (let i = 0; i < tools.length; i++) {
+    await click(169.75 + i * 69.75, 368, 260)
+    // Read it over bare ground. Anything the player can press carries its own
+    // hand cursor while the mouse is on it — which is correct, and is not the
+    // question here. The top-left corner is scenery on every field.
+    await moveOnStage(20, 60)
+    seen.push(await pointer())
+  }
+  const wearing = tools.map((id, i) => seen[i].includes(`cursors/${id}.png`))
+  eq('every tool puts itself on the pointer', wearing, tools.map(() => true),
+    JSON.stringify(seen.map(c => c.slice(0, 40))))
+
+  await click(547, 364, 700)                    // home
+  eq('and the field hands the arrow back on the way out', await scene(), 'Farm')
+  const home = await pointer()
+  check('the watering can did not follow the player out', !home.includes('cursors/'), home)
+  await click(158, 263, 700)                    // back into the field
+  check('the field opens again for what follows', await scene() === 'Plot', await scene())
+}
 
 /* --------------------------- an answer arriving after the screen was left */
 // The batch test further down covers the guard between one send and the next.
