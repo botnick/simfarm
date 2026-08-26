@@ -4,10 +4,10 @@
 // rules engine is perfectly fine.
 import puppeteer from 'puppeteer-core'
 import { mkdirSync } from 'node:fs'
-import { freshShots } from './lib/shots.mjs'
+import { beginShots } from './lib/shots.mjs'
 
 const URL = process.env.URL || 'http://localhost:5180/'
-const SHOTS = freshShots('shots/e2e')
+const shots = beginShots('shots/e2e')
 const W = 600, H = 420
 
 let pass = 0
@@ -59,7 +59,7 @@ const stopIfBroken = (where) => {
 }
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
-const shot = (n) => page.screenshot({ path: `${SHOTS}/${n}.png` })
+const shot = (n) => page.screenshot({ path: shots.path(`${n}.png`) })
 
 // The canvas is letterboxed to fit, so click in stage coordinates.
 const click = async (gx, gy, settle = 300) => {
@@ -1612,5 +1612,9 @@ await shot('13-again')
 await browser.close()
 check('no console errors anywhere in the run', errors.length === 0, [...new Set(errors)].join(' | '))
 
+// The run reached the end, so the pictures it took describe this run and are
+// safe to publish. A run that died before here leaves none, rather than a set
+// that looks current and is not.
+shots.finish({ passed: pass, failed: failures.length, failures })
 console.log(`\n${pass} passed, ${failures.length} failed\n`)
 if (failures.length) { failures.forEach(f => console.error(`  ${f}`)); process.exit(1) }

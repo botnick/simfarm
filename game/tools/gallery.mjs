@@ -1,7 +1,7 @@
 // Captures every screen in a realistic mid-game state, for reviewing the look.
 import puppeteer from 'puppeteer-core'
 import { mkdirSync } from 'node:fs'
-import { freshShots } from './lib/shots.mjs'
+import { beginShots } from './lib/shots.mjs'
 
 const lang = process.argv[2] || 'en'
 
@@ -19,9 +19,10 @@ const SHAPES = {
 const shapeName = process.argv[3] || 'desktop'
 const shape = SHAPES[shapeName] ?? SHAPES.desktop
 
-// Only this run's own pictures: the gallery is invoked once per language and
-// device shape, and each one fills a different corner of the same directory.
-freshShots('shots/gallery', `${shapeName}-${lang}-`)
+// Published only if this run finishes. Per prefix, because the gallery is
+// invoked once per language and device shape and each fills a different corner
+// of the same directory.
+const shots = beginShots('shots/gallery', { prefix: `${shapeName}-${lang}-`, lang, shape: shapeName })
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--disable-gpu'] })
 const p = await b.newPage()
 await p.setViewport({ width: shape.width, height: shape.height, deviceScaleFactor: 2, isMobile: shape.mobile, hasTouch: shape.mobile })
@@ -50,7 +51,7 @@ const click = async (sx, sy, wait = 500) => {
   await p.mouse.click(px, py)
   await new Promise(r => setTimeout(r, wait))
 }
-const shot = (n) => p.screenshot({ path: `shots/gallery/${shapeName}-${lang}-${n}.png` })
+const shot = (n) => p.screenshot({ path: shots.path(`${n}.png`) })
 
 await shot('1-menu')
 await click(208, 284, 700)
@@ -102,4 +103,5 @@ await p.evaluate(() => { window.__game.registry.get('state').day = 364 })
 await click(547, 364, 400); await click(522, 394, 900); await shot('9-end')
 
 await b.close()
-console.log(`shots/gallery/${shapeName}-${lang}-*.png`)
+const n = shots.finish({ outcome: 'pass' })
+console.log(`shots/gallery/${shapeName}-${lang}-*.png  (${n}, complete)`)

@@ -2,8 +2,8 @@
 // board really does fill the screen rather than sitting in letterbox bars.
 import puppeteer from 'puppeteer-core'
 import { mkdirSync } from 'node:fs'
-import { freshShots } from './lib/shots.mjs'
-freshShots('shots/mobile')
+import { beginShots } from './lib/shots.mjs'
+const shots = beginShots('shots/mobile')
 
 const URL = process.env.URL || 'http://localhost:5180/'
 const DEVICES = [
@@ -66,8 +66,12 @@ for (const d of DEVICES) {
   if (!ok) bad++
   console.log(`  ${d.name.padEnd(17)} ${d.width}x${d.height}  turned=${m.portrait}  fullscreen-btn=${m.fullscreenBtn}`
     + `  shown=${m.canvas.w}x${m.canvas.h}  screen used=${Math.round(m.coverage * 100)}%  tap->${scene}  ${ok ? 'ok' : 'PROBLEM'}`)
-  await p.screenshot({ path: `shots/mobile/${d.name}.png` })
+  await p.screenshot({ path: shots.path(`${d.name}.png`) })
   await p.close()
 }
 await b.close()
+// The run reached the end, so the pictures it took describe this run and are
+// safe to publish. A run that died before here leaves none, rather than a set
+// that looks current and is not.
+shots.finish({ outcome: bad ? 'fail' : 'pass', failed: bad })
 process.exit(bad ? 1 : 0)

@@ -13,12 +13,12 @@ import { createServer } from 'node:net'
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { freshShots } from './lib/shots.mjs'
+import { beginShots } from './lib/shots.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const W = 600, H = 420
 const DAYS = Number(process.env.PLAY_DAYS || 24)
-freshShots('shots/play')
+const shots = beginShots('shots/play')
 
 let pass = 0
 const failures = []
@@ -331,7 +331,7 @@ for (let day = 0; day < DAYS; day++) {
   if (!barnOk) trouble.push(`day ${dayAfter}: barn ${await farm('JSON.stringify(s.barn.crops)')}`)
 }
 
-await page.screenshot({ path: 'shots/play/farm.png' })
+await page.screenshot({ path: shots.path('farm.png') })
 
 /* ---------------------------------------------------------------- the report */
 const endDay = await farm('s.day')
@@ -360,5 +360,9 @@ ok('no console errors in the whole game', errors.length === 0, [...new Set(error
 
 await browser.close()
 server.kill()
+// The run reached the end, so the pictures it took describe this run and are
+// safe to publish. A run that died before here leaves none, rather than a set
+// that looks current and is not.
+shots.finish({ passed: pass, failed: failures.length, failures })
 console.log(`\n${pass} passed, ${failures.length} failed\n`)
 if (failures.length) { failures.forEach(f => console.error(`  ${f}`)); process.exit(1) }

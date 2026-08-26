@@ -11,11 +11,11 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { onScreen } from './lib/onscreen.mjs'
 import { killWith } from '../../server/lib-cleanup.mjs'
-import { freshShots } from './lib/shots.mjs'
+import { beginShots } from './lib/shots.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const W = 600, H = 420
-freshShots('shots/online')
+const shots = beginShots('shots/online')
 
 let pass = 0
 const failures = []
@@ -173,7 +173,7 @@ const dayBefore = await farm('s.day')
 await click(522, 394, 900)                                   // END DAY
 eq('the day advanced', await farm('s.day'), dayBefore + 1)
 eq('and the server is on the same day', (await serverState()).day, await farm('s.day'))
-await page.screenshot({ path: 'shots/online/1-farm.png' })
+await page.screenshot({ path: shots.path('1-farm.png') })
 
 /* --------------------------------- an impatient player, before there is a farm */
 // Opening a farm is a network round trip, and NEW GAME is one tap away from
@@ -243,7 +243,7 @@ await click(547, 364, 800)
 const afterSync = await farm('s.money')
 ok('but the next answer from the server replaces it', afterSync !== 999999, `still ${afterSync}`)
 eq('and matches the server exactly', afterSync, (await serverState()).money)
-await page.screenshot({ path: 'shots/online/2-after-tamper.png' })
+await page.screenshot({ path: shots.path('2-after-tamper.png') })
 
 /* ------------------------------------------------------- the market board */
 // The board reads the week's orders and the saturation counters, both of which
@@ -293,7 +293,7 @@ if (openIdx >= 0) {
   eq('the server recorded the order as filled', (await serverState()).market.orders[openIdx].filled, order.quota)
   eq('and the barn is empty on the server', (await serverState()).barn.crops[order.cropId] ?? 0, 0)
 }
-await page.screenshot({ path: 'shots/online/3-market.png' })
+await page.screenshot({ path: shots.path('3-market.png') })
 
 // A browser that edits the board must not be believed either.
 await page.evaluate(() => {
@@ -356,7 +356,7 @@ eq('an edited board is replaced by the server\'s', reread, (await serverState())
   const floodedAfter = (await serverState()).market.sold[id] ?? 0
   ok('the server counted what the market could not absorb',
     floodedAfter > floodedBefore, `${floodedBefore} -> ${floodedAfter}`)
-  await page.screenshot({ path: 'shots/online/4-saturation.png' })
+  await page.screenshot({ path: shots.path('4-saturation.png') })
 }
 
 /* -------------------------------------- a sale the rescue loan swallows whole */
@@ -522,5 +522,9 @@ ok('no console errors', errors.length === 0, [...new Set(errors)].join(' | '))
 
 await browser.close()
 server.kill()
+// The run reached the end, so the pictures it took describe this run and are
+// safe to publish. A run that died before here leaves none, rather than a set
+// that looks current and is not.
+shots.finish({ passed: pass, failed: failures.length, failures })
 console.log(`\n${pass} passed, ${failures.length} failed\n`)
 if (failures.length) { failures.forEach(f => console.error(`  ${f}`)); process.exit(1) }
