@@ -112,6 +112,26 @@ otherwise become no ceiling at all:
 
 ---
 
+## Where the browser is told to find this server
+
+The bundle reads `VITE_SERVER_URL` at **build** time, so the address is baked
+into the JavaScript. That is fine for a hostname you own and wrong for anything
+ephemeral: a quick tunnel mints a new URL every time it restarts, and the build
+that was made against the old one keeps asking for a host that is no longer
+there. The game does not crash — it reports a farm it cannot reach, which the
+end-to-end suite covers — but it is offline until somebody rebuilds it, and
+nothing about the running page says why.
+
+So before a deployment counts as durable, the address wants to be one of:
+
+- a stable hostname the tunnel or proxy is pinned to, or
+- the same origin the game is served from, with `/api` reverse-proxied to this
+  server, so there is no cross-origin address to configure at all, or
+- something the page reads at runtime rather than at build time.
+
+The browser already prefers `localStorage['simfarm.server']` over the built-in
+value, which is enough to repoint one browser by hand but not a deployment.
+
 ## What a host MUST do
 
 **1. Bind `farmId` to your own identity.** This is the important one.
