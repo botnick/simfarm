@@ -1168,39 +1168,67 @@ export function checkData(data) {
   // keeps marking recipes usable until nothing new becomes usable. Whatever is
   // left outside is content the rule book describes, prices and draws, and no
   // farm could ever hold.
-  const reachableCrop = new Set((data.crops ?? []).filter(c => Number.isFinite(c.seedPrice)).map(c => c.id))
-  if (data.rules?.rescue?.cropId) reachableCrop.add(data.rules.rescue.cropId)
-  const reachableGood = new Set((data.animals ?? [])
-    .filter(a => Number.isFinite(a.price) && a.produces)
-    .map(a => a.produces))
-  // Every supply carries a price — checked below — so all of them are buyable.
-  const reachableSupply = new Set((data.supplies ?? []).map(x => x.id))
+  // What a farm can get is decided in two passes, because the level gate is
+  // itself something a rule book can make unreachable. A book where nothing
+  // grants experience never leaves level one, and everything gated above it is
+  // then as unobtainable as a good no recipe makes — while looking perfectly
+  // well-formed. Treating every priced crop as available missed that entirely.
+  const atLevel = (x) => x?.unlockLevel ?? 1
+  const rescueCrop = byId(data.crops, data.rules?.rescue?.cropId)
 
-  const canRun = (r) => (r.inputs ?? []).every(i =>
-    i.anyCrop != null ? reachableCrop.size > 0
-      : i.crop ? reachableCrop.has(i.crop)
-        : i.good ? reachableGood.has(i.good)
-          : true)
-
-  const usable = new Set()
-  for (let spread = true; spread;) {
-    spread = false
-    for (const r of data.recipes ?? []) {
-      if (usable.has(r) || !canRun(r)) continue
-      usable.add(r)
-      spread = true
-      if (r.output?.good && !reachableGood.has(r.output.good)) reachableGood.add(r.output.good)
-      if (r.output?.supply) reachableSupply.add(r.output.supply)
+  const closureFor = (ceiling) => {
+    const crops = new Set((data.crops ?? [])
+      .filter(c => Number.isFinite(c.seedPrice) && atLevel(c) <= ceiling).map(c => c.id))
+    // The rescue seed is given, not bought, but it still has to be planted, and
+    // planting checks the level like everything else.
+    if (rescueCrop && atLevel(rescueCrop) <= ceiling) crops.add(rescueCrop.id)
+    const beasts = (data.animals ?? []).filter(a => Number.isFinite(a.price) && atLevel(a) <= ceiling)
+    const goods = new Set(beasts.map(a => a.produces).filter(Boolean))
+    const usable = new Set()
+    const runnable = (r) => (r.inputs ?? []).every(i =>
+      i.anyCrop != null ? crops.size > 0
+        : i.crop ? crops.has(i.crop)
+          : i.good ? goods.has(i.good)
+            : true)
+    for (let spread = true; spread;) {
+      spread = false
+      for (const r of data.recipes ?? []) {
+        if (usable.has(r) || !runnable(r)) continue
+        usable.add(r)
+        spread = true
+        if (r.output?.good) goods.add(r.output.good)
+      }
     }
+    return { crops, goods, usable, beasts }
   }
 
+  // Pass one: a farm that has never levelled up.
+  const start = closureFor(1)
+  // Pass two, only if something in that farm's reach actually grants experience.
+  const xp = data.progression?.xp ?? {}
+  const marketOpen = (data.rules?.market?.orderCount ?? 0) > 0
+  const canClimb =
+    (xp.harvestTile > 0 && start.crops.size > 0)
+    || (xp.order > 0 && marketOpen && start.crops.size > 0)
+    || (xp.feedAll > 0 && start.beasts.length > 0)
+    || (xp.craft > 0 && start.usable.size > 0)
+  const reach = canClimb ? closureFor(MAX_LEVEL) : start
+
   for (const g of data.goods ?? []) {
-    if (g?.id && !reachableGood.has(g.id)) {
+    if (g?.id && !reach.goods.has(g.id)) {
       problems.push(`nothing can produce "${g.id}", so no farm could ever hold one`)
     }
   }
   for (const r of data.recipes ?? []) {
-    if (!usable.has(r)) problems.push(`recipe "${r?.id}" needs something no farm could ever hold`)
+    if (!reach.usable.has(r)) problems.push(`recipe "${r?.id}" needs something no farm could ever hold`)
+  }
+  if (!canClimb) {
+    for (const c of data.crops ?? []) {
+      if (atLevel(c) > 1) problems.push(`crop "${c.id}" waits for level ${atLevel(c)}, and nothing in this rule book grants experience`)
+    }
+    for (const a of data.animals ?? []) {
+      if (atLevel(a) > 1) problems.push(`animal "${a.id}" waits for level ${atLevel(a)}, and nothing in this rule book grants experience`)
+    }
   }
 
   const audio = data.audio ?? {}

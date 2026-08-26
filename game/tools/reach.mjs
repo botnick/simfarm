@@ -339,6 +339,32 @@ const supplyIds = new Set(data.supplies.map(s => s.id))
   ok(`and two recipes that each need what the other makes (${one.id}, ${two.id})`,
     rules.checkData(circle).some(p => p.includes(one.id)) && rules.checkData(circle).some(p => p.includes(two.id)))
 
+  // The level gate is itself something a rule book can make unreachable. If
+  // nothing grants experience the farm never leaves level one, and everything
+  // waiting above it is as unobtainable as a good no recipe makes — while the
+  // book still looks well-formed. Reachability is decided in two passes for
+  // exactly this: what a level-one farm can get, and then whether anything in
+  // that reach actually earns a level.
+  const noXp = structuredClone(data)
+  for (const k of Object.keys(noXp.progression.xp)) if (!k.startsWith('_')) noXp.progression.xp[k] = 0
+  const said = rules.checkData(noXp)
+  ok('and a book where nothing grants experience, with content waiting on levels',
+    said.some(p => p.includes('grants experience')))
+  ok('and the goods that gated content would have produced', said.some(p => p.includes('can produce')))
+
+  // The circular one: crafting is the only thing that pays experience, and the
+  // only recipe needs a crop that waits for a level nothing can reach.
+  const circularXp = structuredClone(noXp)
+  circularXp.progression.xp.craft = 12
+  const gatedCrop = circularXp.crops.find(c => (c.unlockLevel ?? 1) > 1)
+  circularXp.recipes = [{
+    id: 'circular', name: { en: 'C', th: 'ค' }, energy: 1, days: 0,
+    inputs: [{ crop: gatedCrop.id, amount: 1 }],
+    output: { good: circularXp.goods[0].id, amount: 1 }, desc: { en: 'x', th: 'x' },
+  }]
+  ok('and crafting that pays experience but needs what the level would unlock',
+    rules.checkData(circularXp).some(p => p.includes('circular')))
+
   // The other half of the same question. A reference can dangle; a number can
   // be outside the domain the engine assumes. The line between the two kinds of
   // wrong book is deliberate: this refuses one the engine cannot run — a zero
