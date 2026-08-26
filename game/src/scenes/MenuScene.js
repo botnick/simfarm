@@ -201,28 +201,21 @@ export default class MenuScene extends Phaser.Scene {
     })
   }
 
+  /**
+   * What the farm wants from you, on one panel.
+   *
+   * This was hand-built before the shared one existed, and kept its own copy of
+   * everything: its own blocker, its own close, its own wrapping. The cost was
+   * not the duplication but what it silently opted out of — it never took the
+   * modal lock, so it did not stand the keyboard down, and it was invisible to
+   * the one-panel-at-a-time rule, so another panel could stack on top of it.
+   */
   howToPlay() {
-    if (this.helpOpen) return
-    this.helpOpen = true
-    const parts = []
-    const add = (...o) => { o.forEach(x => { x.setDepth?.(9000); parts.push(x) }); return o[0] }
-    const close = () => { parts.forEach(o => o.destroy()); this.helpOpen = false }
-
-    add(this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.62).setOrigin(0).setInteractive()
-      .on('pointerup', close))
-    const W = 470, H = 300, left = WIDTH / 2 - W / 2, top = HEIGHT / 2 - H / 2
-    add(panel(this, left, top, W, H))
-    add(title(this, WIDTH / 2, top + 26, t('help.title'), { size: 16 }))
-
-    // Wrapped to the panel rather than the stage: Thai runs longer than English
-    // almost everywhere, and a line laid out for one overflows for the other.
-    let y = top + 56
-    for (const key of ['help.line1', 'help.line2', 'help.line3', 'help.line4', 'help.line5']) {
-      const line = add(label(this, left + 22, y, t(key), { size: 11, color: C.ink }))
-      line.setWordWrapWidth(W - 44)
-      y += Math.max(28, line.displayHeight + 12)
-    }
-    add(button(this, WIDTH / 2, top + H - 26, 150, 28, t('help.close'), close, { size: 12 }))
+    dialog(this, {
+      heading: t('help.title'),
+      lines: ['help.line1', 'help.line2', 'help.line3', 'help.line4', 'help.line5'].map(k => t(k)),
+      buttons: [{ text: t('help.close') }],
+    })
   }
 
   focusName() {

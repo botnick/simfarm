@@ -176,6 +176,25 @@ check('the game boots to the menu', await scene() === 'Menu')
     !shown.some(t => /(^|\s)(undefined|null|NaN)(\s|$)/.test(t) || /\n\s*days/.test(t)), JSON.stringify(shown))
 }
 check('the display font actually loaded', await page.evaluate(() => document.fonts.check('600 16px Mitr')))
+/* ------------------------------- every panel stands the keyboard down, not some */
+// The instructions panel was built before the shared one existed and kept its
+// own copy of everything, which meant it silently opted out of the modal lock:
+// it looked identical and behaved differently. A panel that does not take the
+// lock is a panel the keyboard plays straight through.
+{
+  await page.evaluate(() => {
+    localStorage.removeItem('simfarm.greeted')
+    window.__game.scene.getScene('Menu').scene.restart()
+  })
+  await wait(1200)
+  const locked = () => page.evaluate(() => !!window.__game.scene.getScene('Menu')?.__modal)
+  check('the welcome holds the keyboard', await locked())
+  check('and hands on to the instructions', await press(/^OK$|^ตกลง$/, 700))
+  check('which holds it too', await locked(), 'the instructions let the keyboard through')
+  check('and lets go once answered', await press(/GOT IT|เข้าใจแล้ว/, 700) && !(await locked()))
+  await page.evaluate(() => localStorage.setItem('simfarm.greeted', '1'))
+}
+
 await shot('01-menu')
 
 /* --------------------------------------------------------------- new game */
