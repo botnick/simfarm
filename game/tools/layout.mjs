@@ -79,7 +79,7 @@ for (const lang of ['en', 'th']) {
   page.on('pageerror', e => errors.push(`pageerror: ${e.message}`))
   await page.evaluateOnNewDocument((l) => {
     localStorage.setItem('simfarm.lang', l)
-    localStorage.setItem('simfarm.server', '')       // the board, not the network
+    localStorage.setItem('simfarm.server', ''); localStorage.setItem('simfarm.greeted', '1')       // the board, not the network
   }, lang)
   await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await new Promise(r => setTimeout(r, 2600))
@@ -110,8 +110,10 @@ for (const lang of ['en', 'th']) {
   await look('a field', 'Plot')
   await click(45, 378, 700)                          // the seed picker, a modal over the field
   await look('the seed picker', 'Plot')
-  await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 400))
-  await click(547, 364, 800)                         // home
+  // Escape leaves the field on its own. The extra click that used to follow it
+  // landed on SAVE once the farm grew one, which opened a panel and swallowed
+  // everything after it.
+  await page.keyboard.press('Escape'); await new Promise(r => setTimeout(r, 600))
 
   await click(141, 74, 900)                          // the house
   await look('the workshop', 'Workshop')

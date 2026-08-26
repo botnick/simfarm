@@ -68,6 +68,23 @@ const click = async (gx, gy, settle = 300) => {
   await wait(settle)
   stopIfBroken(`clicking ${gx},${gy}`)
 }
+/** Press a button by what it says, wherever the panel put it. */
+const press = async (re, settle = 500) => {
+  const at = await page.evaluate((src) => {
+    const rx = new RegExp(src)
+    for (const sc of window.__game.scene.scenes) {
+      if (!sc.scene.isActive()) continue
+      for (const o of sc.children.list) {
+        if (o.type === 'Text' && o.visible && rx.test(o.text)) return { x: o.x, y: o.y }
+      }
+    }
+    return null
+  }, re.source)
+  if (!at) return false
+  await click(at.x, at.y, settle)
+  return true
+}
+
 const moveOnStage = async (gx, gy) => {
   const b = await page.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
   await page.mouse.move(b.x + (gx / W) * b.w, b.y + (gy / H) * b.h)
@@ -133,7 +150,10 @@ console.log(`\ne2e against ${URL}\n`)
 // and running these against one would quietly test something else entirely —
 // which is how the artifact came to be the one thing never tested here.
 // Re-applied on every navigation, so it survives the reloads below.
-await page.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', ''))
+await page.evaluateOnNewDocument(() => {
+  localStorage.setItem('simfarm.server', '')
+  localStorage.setItem('simfarm.greeted', '1')
+})
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
 await page.evaluate(() => localStorage.clear())
 await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -1433,9 +1453,17 @@ await click(566, 74, 800)                                   // back to English
 /* ------------------------------------------------------------- save/load */
 await poke('s.money = 4242')
 await click(522, 358, 500)                                  // SAVE
+// The original said so on a screen rather than in a toast that fades, and a
+// save is the one thing a player needs to be sure of.
+const said = await texts()
+check('saving says so on a screen', said.some(x => /GAME SAVED|บันทึกแล้ว/.test(x)), JSON.stringify(said.slice(0, 6)))
+check('and offers the way back', said.some(x => /CONTINUE|เล่นต่อ/.test(x)))
+await press(/CONTINUE|เล่นต่อ/, 400)
 check('saving writes a slot', await page.evaluate(() => !!localStorage.getItem('simfarm')))
 await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }); await wait(2200)
 await click(392, 284, 700)                                  // LOAD GAME
+// And it shows what it is about to open before opening it.
+check('loading shows the farm it found', await press(/CONTINUE|เล่นต่อ/, 900), 'no resume screen')
 check('a saved game loads', await scene() === 'Farm')
 eq('the loaded game keeps its money', await read('s.money'), 4242)
 await shot('11-loaded')
@@ -1449,6 +1477,7 @@ await shot('11-loaded')
 {
   await poke(`s.plots[0].cropId = '${firstCrop.id}'; s.plots[0].tiles.forEach(t => { t.stage = d.rules.stage.seed })`)
   await click(522, 358, 500)                                // SAVE
+  await press(/CONTINUE|BACK TO MENU/, 400)                 // dismiss the confirmation
   // Age the slot the way a deploy would: the farm still names a crop, the rule
   // book no longer has one by that name.
   const rewritten = await page.evaluate(() => {
@@ -1463,6 +1492,8 @@ await shot('11-loaded')
 
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }); await wait(2200)
   await click(392, 284, 900)                                // LOAD GAME
+  // It shows the farm it found before opening it, so say yes to it.
+  await press(/CONTINUE|เล่นต่อ/, 900)
   check('the farm still opens', await scene() === 'Farm', await scene())
   const told = await appears(/THE FARM HAS CHANGED|ไร่มีการเปลี่ยนแปลง/)
   check('and says the game changed under it rather than saying nothing',
@@ -1514,7 +1545,10 @@ await shot('13-again')
   const stranded = await browser.newPage()
   await stranded.setViewport({ width: 1200, height: 840 })
   // A port with nothing behind it, so the answer is a real network failure.
-  await stranded.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', 'http://127.0.0.1:1/'))
+  await stranded.evaluateOnNewDocument(() => {
+  localStorage.setItem('simfarm.server', 'http://127.0.0.1:1/')
+  localStorage.setItem('simfarm.greeted', '1')
+})
   await stranded.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await wait(2600)
   const b = await stranded.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })

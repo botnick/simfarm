@@ -30,7 +30,7 @@ for (const d of DEVICES) {
     // so without this the tap that should open a farm goes to whatever that
     // address is — and every device reads as a problem for a reason that has
     // nothing to do with the phone.
-    localStorage.setItem('simfarm.server', '')
+    localStorage.setItem('simfarm.server', ''); localStorage.setItem('simfarm.greeted', '1')
   }, !!d.upright)
   await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await new Promise(r => setTimeout(r, 2600))

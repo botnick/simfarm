@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { C, art, button, fitCamera, label, panel, title, toast } from '../ui/kit.js'
+import { C, art, button, dialog, fitCamera, label, money, panel, title, toast } from '../ui/kit.js'
 import { WIDTH, HEIGHT } from '../main.js'
 import { banner, enter } from '../ui/fx.js'
 import { playMusic } from '../core/audio.js'
@@ -11,6 +11,9 @@ import { t, nextLang, setLang } from '../core/i18n.js'
 
 /** Title screen on the original cover art: name your farm, then start. */
 // The same names the HUD uses, so a refusal reads the same wherever it lands.
+/** Said once, ever. A greeting that will not go away is not a greeting. */
+const GREETED = 'simfarm.greeted'
+
 const REFUSALS = {
   'slow down': 'refused.tooFast',
   'no session': 'refused.session',
@@ -68,6 +71,11 @@ export default class MenuScene extends Phaser.Scene {
         : t('menu.summaryEndless', data.crops.length, data.recipes.length, data.rules.plots),
       { size: 11, color: C.ink })
 
+    // The original opened by saying what a farm is for and asking for its name.
+    // This opened on a form. Said once, on the first visit ever, and then never
+    // again — a greeting that will not go away is not a greeting.
+    this.time.delayedCall(260, () => this.sayHello())
+
     // Below the panel, clear of NEW GAME and LOAD GAME. The original explained
     // itself on a screen of its own and this game explained itself nowhere, so
     // a first-time player had to work out what a farm wanted from them.
@@ -79,24 +87,15 @@ export default class MenuScene extends Phaser.Scene {
       // A sealed save belongs to the server and is handed back untouched; a
       // plain one is a farm this browser can play by itself.
       const sealed = loadSealed()
+      // Online the envelope is the server's and this browser cannot read it, so
+      // there is nothing to show; the farm itself arrives from the server.
       if (sealed) return this.begin(null, sealed)
       const s = load()
-      // A farm saved before somebody edited the game's data outlives that edit,
-      // and a plot growing a crop the game no longer has takes the night down
-      // with it every time the day ends. Bring the save back into agreement
-      // with the data first, and say what that cost.
-      if (s) {
-        const lost = reconcile(s, data)
-        const gone = lost.crops.length + lost.animals.length + lost.goods.length
-          + lost.recipes.length + lost.plots + lost.orders
-        // Queued after the farm has started, because starting one clears the
-        // queue — a new farm must not inherit the last one's congratulations.
-        this.begin(s)
-        if (gone) banner(this, t('menu.saveChanged'), { tone: 'blue', sub: t('menu.saveChangedSub') })
-      }
+      if (s) return this.askToResume(s, () => this.resume(s))
       // Nothing openable: the button is disabled in that case, so reaching here
       // would mean the slot changed under us.
     }, { tone: 'blue', size: 14 })
+
     // Only offer LOAD when the slot holds something this session can actually
     // open: a sealed save needs the server that sealed it, and a plain one is
     // a farm only the browser plays.
@@ -133,6 +132,64 @@ export default class MenuScene extends Phaser.Scene {
    * dismissed, it has nothing to remember, and a scene would need registering,
    * a way back, and a place in the frame map for no gain.
    */
+  /**
+   * Open the farm the slot holds, once the player has said yes to it.
+   *
+   * A farm saved before somebody edited the game's data outlives that edit, and
+   * a plot growing a crop the game no longer has takes the night down with it
+   * every time the day ends. Bring the save back into agreement with the data
+   * first, and say what that cost.
+   */
+  resume(s) {
+    const data = this.registry.get('data')
+    const lost = reconcile(s, data)
+    const gone = lost.crops.length + lost.animals.length + lost.goods.length
+      + lost.recipes.length + lost.plots + lost.orders
+    // Queued after the farm has started, because starting one clears the queue
+    // — a new farm must not inherit the last one's congratulations.
+    this.begin(s)
+    if (gone) banner(this, t('menu.saveChanged'), { tone: 'blue', sub: t('menu.saveChangedSub') })
+  }
+
+  /** The goal, and the one thing the player has to do before starting. */
+  sayHello() {
+    if (!this.scene.isActive()) return
+    let seen = false
+    try { seen = localStorage.getItem(GREETED) === '1' } catch { seen = true }
+    if (seen) return
+    try { localStorage.setItem(GREETED, '1') } catch { /* private mode */ }
+    const d = this.registry.get('data')
+    dialog(this, {
+      heading: t('welcome.title'),
+      lines: [
+        d.rules.endDay ? t('welcome.goalYear', d.rules.endDay) : t('welcome.goal'),
+        t('welcome.name'),
+      ],
+      buttons: [{ text: t('welcome.ok'), go: () => this.howToPlay() }],
+    })
+  }
+
+  /**
+   * What is in the slot, before committing to it.
+   *
+   * The original showed the day and the money of the farm you were about to
+   * resume. It is the one moment where a player can tell whether this is the
+   * farm they meant, and pressing LOAD straight into it takes that away.
+   */
+  askToResume(farm, then) {
+    dialog(this, {
+      heading: t('loaded.title'),
+      lines: [
+        `${t('loaded.day')}  ${farm?.day ?? 1}`,
+        `${t('loaded.money')}  ${money(farm?.money ?? 0)}`,
+      ],
+      buttons: [
+        { text: t('saved.toMenu'), tone: 'wood' },
+        { text: t('loaded.continue'), go: then },
+      ],
+    })
+  }
+
   howToPlay() {
     if (this.helpOpen) return
     this.helpOpen = true

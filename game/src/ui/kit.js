@@ -1,7 +1,7 @@
 // The game's look. The scene plates are chunky, saturated, black-outlined
 // cartoon art, so everything drawn on top of them is built to match: glossy
 // panels with a heavy rim, pressed buttons, and the original's own display face.
-import { RENDER_SCALE, WIDTH } from '../core/size.js'
+import { RENDER_SCALE, WIDTH, HEIGHT } from '../core/size.js'
 import { sfx } from '../core/audio.js'
 import { owned } from '../core/fatal.js'
 
@@ -225,4 +225,51 @@ export function toast(scene, x, y, text, color = '#ffffff') {
   t.setY(top)
   scene.tweens.add({ targets: t, y: top - 34, alpha: 0, duration: 1000, ease: 'Cubic.easeOut', onComplete: () => t.destroy() })
   return t
+}
+
+/**
+ * A panel that stops the game until it is answered.
+ *
+ * The original spoke to the player on screens of its own — a welcome, an
+ * instruction, a confirmation that the farm was saved — and this game had
+ * grown a different habit of saying everything in a toast that fades. Some
+ * things should wait to be read.
+ *
+ * Returns `close`, so a caller that opens one can also take it away. Every
+ * button closes it before doing anything, since all of them lead somewhere.
+ */
+export function dialog(scene, { heading, lines = [], buttons = [], width = 470, onClose = null }) {
+  const parts = []
+  const keep = (...o) => { o.forEach(x => { x.setDepth?.(9000); parts.push(x) }); return o[0] }
+  const close = () => { parts.forEach(o => o.destroy()); onClose?.() }
+
+  const rows = Math.max(1, lines.filter(Boolean).length)
+  const height = 108 + rows * 30 + (buttons.length ? 44 : 0)
+  const left = WIDTH / 2 - width / 2
+  const top = Math.max(18, HEIGHT / 2 - height / 2)
+
+  // Swallows every click behind it, so the farm cannot be played through it.
+  keep(scene.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.62).setOrigin(0).setInteractive())
+  keep(panel(scene, left, top, width, height))
+  keep(title(scene, WIDTH / 2, top + 28, heading, { size: 17 }))
+
+  let y = top + 62
+  for (const line of lines) {
+    if (!line) continue
+    // Wrapped to the panel: Thai runs longer than English almost everywhere,
+    // and a line laid out for one overflows for the other.
+    const text = keep(label(scene, WIDTH / 2, y, line,
+      { size: 12, color: C.ink, origin: [0.5, 0.5], align: 'center' }))
+    text.setWordWrapWidth(width - 48)
+    y += Math.max(28, text.displayHeight + 10)
+  }
+
+  const wide = Math.min(190, (width - 40) / Math.max(1, buttons.length) - 10)
+  buttons.forEach((b, i) => {
+    const span = buttons.length * (wide + 12) - 12
+    const x = WIDTH / 2 - span / 2 + wide / 2 + i * (wide + 12)
+    keep(button(scene, x, top + height - 28, wide, 30, b.text, () => { close(); b.go?.() },
+      { tone: b.tone ?? 'green', size: 12 }))
+  })
+  return close
 }

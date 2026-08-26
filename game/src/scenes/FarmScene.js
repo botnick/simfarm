@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { C, button, fitCamera, label, money, panel, toast } from '../ui/kit.js'
+import { C, button, dialog, fitCamera, label, money, panel, toast } from '../ui/kit.js'
 import { WIDTH, HEIGHT } from '../main.js'
 import { banner, enter } from '../ui/fx.js'
 import { playMusic, sfx } from '../core/audio.js'
@@ -47,6 +47,22 @@ export default class FarmScene extends Phaser.Scene {
     // Offering a door to an empty room is worse than no door.
     if (has(this.data_).workshop) this.hotspot(hits, 'goto:house', t('farm.workshop'), () => this.scene.start('Workshop'))
     this.hotspot(hits, 'goto:village', t('farm.shop', this.data_.meta.shopName), () => this.toShop())
+
+    // The plaque already shows the day and the money; pressing it opens the
+    // rest — what last night did, and the three ways on the original offered
+    // from the same place. The field hotspots behind it are enormous and come
+    // from the original art, so this sits above them.
+    // Only where the frame actually paints one. A screen that shows the money
+    // in a floating pill instead has no plaque to press.
+    if (this.hud?.walletAt && this.hud.walletAt.y > HEIGHT / 2) {
+      // Placed by its centre, which is what a zone means by its position. Built
+      // with setOrigin(0) afterwards it kept the hit area it was made with and
+      // swallowed clicks far outside the plaque — the farmhouse stopped opening
+      // the workshop, and nothing about it looked wrong.
+      this.add.zone(14 + 238 / 2, 326 + 82 / 2, 238, 82).setDepth(400)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerup', () => this.dayReport())
+    }
 
     // These sit on top of the road, which is also the way to the village, so they
     // are lifted above the scenery hotspots to win the click.
@@ -233,7 +249,43 @@ export default class FarmScene extends Phaser.Scene {
     // no save at all.
     const ok = this.farm.online ? await this.farm.keepSaved() : save(this.state)
     if (!this.scene.isActive()) return
-    toast(this, WIDTH - 78, HEIGHT - 84, ok ? t('farm.saved') : t('farm.saveFailed'), ok ? '#ffffff' : '#ffd6d6')
+    // The original confirmed a save on a screen of its own. A save is the one
+    // thing a player needs to be sure of, and a toast that fades is the wrong
+    // way to tell them.
+    dialog(this, {
+      heading: ok ? t('saved.title') : t('saved.failed'),
+      buttons: [
+        { text: t('saved.toMenu'), tone: 'wood', go: () => this.scene.start('Menu') },
+        { text: t('saved.continue') },
+      ],
+    })
+  }
+
+  /**
+   * The day, the money, and what the night did — with the three ways on that
+   * the original offered from the same place.
+   *
+   * Reachable at any time from the plaque, so the screen exists and is linked
+   * rather than being a toll gate. Every button leads somewhere; there is no
+   * way to be stuck behind it.
+   */
+  dayReport() {
+    if (!this.scene.isActive()) return
+    const night = this.lastNight
+    const lines = [
+      `${t('loaded.day')}  ${this.state.day}`,
+      `${t('loaded.money')}  ${money(this.state.money)}`,
+      ...(night?.day === this.state.day && night.news.length ? night.news : []),
+    ]
+    dialog(this, {
+      heading: t('report.title'),
+      lines,
+      buttons: [
+        { text: t('report.toMenu'), tone: 'wood', go: () => this.scene.start('Menu') },
+        { text: t('report.save'), tone: 'blue', go: () => this.keep() },
+        { text: t('report.toFarm') },
+      ],
+    })
   }
 
   async nextDay() {
@@ -283,6 +335,30 @@ export default class FarmScene extends Phaser.Scene {
     if (report.newWeek) news.push(t('news.newWeek'))
 
     toast(this, WIDTH / 2, 330, news.length ? news.join('  ·  ') : t('farm.quietNight'), news.length ? '#ffe9a8' : '#ffffff')
+
+    // Kept so the report can be opened later and still say what happened.
+    this.lastNight = { day: this.state.day, news }
+
+    // The original stopped the game every night to show two numbers and a save
+    // button. Both live on this screen permanently now, so making the player
+    // dismiss them 365 times would keep the friction and none of the point.
+    // It opens by itself only on a night worth stopping for — something was
+    // lost, or the farm had to be rescued. Rain and growth are what a night is
+    // for; they are not news that needs answering.
+    // Narrowly: something the player would want to have been stopped for and
+    // could otherwise scroll past. An animal died, or the farm ran out of
+    // everything and had to be lent a seed. Withered crops and rotting stock
+    // are ordinary consequences of a day and already read in the news line —
+    // treating them as notable would put this back in front of every night,
+    // which is the thing it is deliberately not.
+    // One case only: the farm ran out of everything and the game stepped in and
+    // lent it a seed. That is the game acting on the player's behalf, and they
+    // should be told so where they cannot miss it. Everything else a night does
+    // — weather, growth, a withered plant, a lost animal — is reported in the
+    // news line, and stopping the game for any of it would put this back in
+    // front of every night, which is the thing it is deliberately not.
+    const worthStopping = !!report.rescued
+    if (worthStopping) this.dayReport()
 
     this.rainLayer.removeAll(true)
     this.refresh()

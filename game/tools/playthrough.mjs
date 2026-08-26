@@ -55,7 +55,10 @@ const expected = (t) => t.includes('favicon') || t.includes('409') || t.includes
 page.on('console', m => { if (m.type() === 'error' && !expected(m.text())) errors.push(m.text()) })
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`))
 
-await page.evaluateOnNewDocument((url) => localStorage.setItem('simfarm.server', url), SERVER)
+await page.evaluateOnNewDocument((url) => {
+  localStorage.setItem('simfarm.server', url)
+  localStorage.setItem('simfarm.greeted', '1')
+}, SERVER)
 await page.goto(process.env.URL || 'http://localhost:5180/', { waitUntil: 'domcontentloaded', timeout: 60000 })
 await new Promise(r => setTimeout(r, 2400))
 

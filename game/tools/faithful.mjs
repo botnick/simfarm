@@ -127,7 +127,10 @@ await page.setViewport({ width: 1200, height: 840 })
 const errors = []
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`))
 page.on('console', m => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push(m.text().slice(0, 160)) })
-await page.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', ''))
+await page.evaluateOnNewDocument(() => {
+  localStorage.setItem('simfarm.server', '')
+  localStorage.setItem('simfarm.greeted', '1')
+})
 await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded', timeout: 60000 })
 await new Promise(r => setTimeout(r, 2600))
 
@@ -248,7 +251,10 @@ ok('no console errors so far', errors.length === 0, [...new Set(errors)].join(' 
   const said = []
   p2.on('pageerror', e => said.push(`pageerror: ${e.message}`))
   p2.on('console', m => { if (m.type() === 'error' && !m.text().includes('favicon')) said.push(m.text().slice(0, 160)) })
-  await p2.evaluateOnNewDocument(() => localStorage.setItem('simfarm.server', ''))
+  await p2.evaluateOnNewDocument(() => {
+  localStorage.setItem('simfarm.server', '')
+  localStorage.setItem('simfarm.greeted', '1')
+})
   await p2.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await new Promise(r => setTimeout(r, 2600))
   const b2 = await p2.$eval('canvas', c => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })

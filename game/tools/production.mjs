@@ -114,7 +114,10 @@ page.on('pageerror', e => errors.push(`pageerror: ${e.message}`))
 const expected = (text) => text.includes('favicon') || text.includes('403')
 page.on('console', m => { if (m.type() === 'error' && !expected(m.text())) errors.push(m.text().slice(0, 160)) })
 
-await page.evaluateOnNewDocument((url) => localStorage.setItem('simfarm.server', url), API)
+await page.evaluateOnNewDocument((url) => {
+  localStorage.setItem('simfarm.server', url)
+  localStorage.setItem('simfarm.greeted', '1')
+}, API)
 await page.goto(GAME + '/', { waitUntil: 'domcontentloaded', timeout: 60000 })
 await new Promise(r => setTimeout(r, 2600))
 

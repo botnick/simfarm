@@ -56,7 +56,10 @@ page.on('console', m => { if (m.type() === 'error' && !expected(m.text())) error
 page.on('pageerror', e => errors.push(`pageerror: ${e.message}`))
 
 // Point the game at the server before any script runs.
-await page.evaluateOnNewDocument((url) => localStorage.setItem('simfarm.server', url), SERVER)
+await page.evaluateOnNewDocument((url) => {
+  localStorage.setItem('simfarm.server', url)
+  localStorage.setItem('simfarm.greeted', '1')
+}, SERVER)
 await page.goto(process.env.URL || 'http://localhost:5180/', { waitUntil: 'domcontentloaded', timeout: 60000 })
 await new Promise(r => setTimeout(r, 2400))
 
@@ -182,6 +185,7 @@ await page.screenshot({ path: 'shots/online/1-farm.png' })
   await fresh.setViewport({ width: 1200, height: 840 })
   await fresh.evaluateOnNewDocument((url) => {
     localStorage.setItem('simfarm.server', url)
+    localStorage.setItem('simfarm.greeted', '1')
     // Count the asks at the source. The server deliberately tells a stranger
     // nothing about how many farms it is holding, and this is the question
     // anyway: did the browser ask twice?
