@@ -1355,7 +1355,11 @@ const fresh = (level = null) => {
 
   /** The dullest competent farmer: pick, clear, sell, sow the cheapest, water. */
   const farmFor = (s, d, days) => {
-    const rng = () => 0.5
+    // Dry, and nothing else rolled either. Rain waters a field for free, so a
+    // rule book that asks for more work than a day's energy can do would be
+    // rescued by luck rather than caught — and the question here is whether a
+    // farmer can dig itself out with the energy it actually has.
+    const rng = never
     let rescues = 0
     for (let i = 0; i < days; i++) {
       for (let p = 0; p < s.plots.length; p++) { rules.harvestPlot(s, d, p); rules.clearPlot(s, d, p) }
